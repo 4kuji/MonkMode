@@ -40,18 +40,39 @@ JSON formatı tam olarak şu olsun:
     payload = {
         "model": MODEL_NAME,
         "prompt": prompt,
-        "stream": False
+        "stream": False,
+        "format": "json"
     }
 
-    response = requests.post(OLLAMA_URL, json=payload, timeout=120)
-    response.raise_for_status()
+    try:
+        response = requests.post(
+            OLLAMA_URL,
+            json=payload,
+            timeout=10   # hocanın istediği timeout
+        )
 
-    data = response.json()
-    model_text = data.get("response", "").strip()
+        response.raise_for_status()
 
-    parsed = json.loads(model_text)
+        data = response.json()
+        model_text = data.get("response", "").strip()
 
-    if "motivasyon_tavsiyesi" not in parsed or "odaklanma_tavsiyesi" not in parsed:
-        raise ValueError("Model çıktısında beklenen anahtarlar yok")
+        parsed = json.loads(model_text)
 
-    return parsed
+        if "motivasyon_tavsiyesi" not in parsed or "odaklanma_tavsiyesi" not in parsed:
+            raise ValueError("Model çıktısında beklenen anahtarlar yok")
+
+        return parsed
+
+    except requests.exceptions.Timeout:
+        # model çok geç cevap verirse
+        return {
+            "motivasyon_tavsiyesi": "Bugün küçük bir ilerleme bile değerli.",
+            "odaklanma_tavsiyesi": "Şu an kısa bir odaklanma molası verip sonra tekrar deneyebilirsin."
+        }
+
+    except Exception:
+        # model çökerse veya JSON bozulursa
+        return {
+            "motivasyon_tavsiyesi": "Şu an odaklanma perilerinin molası var.",
+            "odaklanma_tavsiyesi": "Biraz sonra tekrar analiz isteyebilirsin."
+        }
