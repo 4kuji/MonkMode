@@ -2,6 +2,7 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from .models import CustomUser, Category, FocusSession
+from django.db.models import Sum
 
 @csrf_exempt
 def register_user(request):
@@ -68,3 +69,35 @@ def save_session(request):
             return JsonResponse({'error': f'Beklenmedik bir hata: {str(e)}'}, status=500)
             
     return JsonResponse({'error': 'Sadece POST istekleri kabul edilir!'}, status=405)
+
+def get_user_stats(request, user_id):
+    if request.method == 'GET':
+        try:
+            # 1. Kullanıcının tüm çalışma seanslarını veritabanından bul
+            sessions = FocusSession.objects.filter(user_id=user_id)
+            
+            # Eğer daha önce hiç çalışmamışsa:
+            if not sessions.exists():
+                return JsonResponse({
+                    'total_focus_minutes': 0,
+                    'total_sessions': 0,
+                    'ai_insight': 'Henüz hiç odaklanma seansın yok. Maymun modunu açma vakti geldi! 🐒'
+                }, status=200)
+
+            # 2. Toplam çalışma süresini hesapla
+            total_time = sessions.aggregate(Sum('duration_minutes'))['duration_minutes__sum'] or 0
+
+            # 3. Frontend'e gidecek veri paketini (JSON) hazırla
+            # Not: Pandas ve Ollama kodları ileride buraya entegre edilecek!
+            response_data = {
+                'total_focus_minutes': total_time,
+                'total_sessions': sessions.count(),
+                'ai_insight': f"Harika gidiyorsun! Toplam {total_time} dakika odaklandın. Bu tempoyu bozma! 🚀"
+            }
+
+            return JsonResponse(response_data, status=200)
+
+        except Exception as e:
+            return JsonResponse({'error': f'Beklenmedik bir hata: {str(e)}'}, status=500)
+    
+    return JsonResponse({'error': 'Sadece GET istekleri kabul edilir!'}, status=405)
