@@ -101,3 +101,39 @@ def get_user_stats(request, user_id):
             return JsonResponse({'error': f'Beklenmedik bir hata: {str(e)}'}, status=500)
     
     return JsonResponse({'error': 'Sadece GET istekleri kabul edilir!'}, status=405)
+
+
+# Frontend'den gelen POST isteklerini engellememesi için CSRF korumasını esnetiyoruz:
+@csrf_exempt 
+def chat_with_ai(request):
+    if request.method == 'POST':
+        try:
+            # frontendden gelen veri paketini (JSON) açıyoruz
+            body_unicode = request.body.decode('utf-8')
+            body_data = json.loads(body_unicode)
+            
+            # İçindeki "message" kutusunu alıyoruz (Eğer boşsa '' dönecek)
+            user_message = body_data.get('message', '')
+
+            if not user_message:
+                return JsonResponse({"error": "Mesaj kısmı boş olamaz!"}, status=400)
+
+            
+            
+            
+            # Şimdilik Frontend'in (Sırdaş'ın) ekranı test edebilmesi için sahte (mock) bir AI cevabı dönüyoruz:
+            ai_reply = f"Ben MonkMode Yapay Zekasıyım! Bana '{user_message}' dedin. Şimdi bahaneleri bırak ve hemen o kronometreyi başlat! 🚀"
+            
+
+            # Yapay zekanın cevabını Sırdaş'a (Frontend) JSON paketi olarak geri fırlatıyoruz
+            return JsonResponse({
+                "status": "success", 
+                "reply": ai_reply
+            }, status=200)
+
+        except json.JSONDecodeError:
+            # Eğer backend JSON formatını bozup gönderirse sistemi çökertmeden uyarı veriyoruz
+            return JsonResponse({"error": "Gönderilen veri geçersiz, lütfen geçerli bir JSON formatı kullanın."}, status=400)
+
+    # Biri bu kapıya POST yerine GET (veri çekme) isteğiyle gelirse kapıdan çevir
+    return JsonResponse({"error": "Hatalı giriş! Bu kapıdan sadece POST metodu ile mesaj gönderilebilir."}, status=405)

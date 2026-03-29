@@ -9,4 +9,8 @@ urlpatterns = [
 
     #İstatistikleri getiren kapı! (<int:user_id> kısmı dinamik ID alır)
     path('stats/<int:user_id>/', views.get_user_stats, name='user_stats'),
+
+    #Chatbot API Rotası
+    path('chat/', views.chat_with_ai, name='chat_with_ai'),
+
 ]
