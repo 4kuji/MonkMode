@@ -1,16 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import { Play, Pause, RotateCcw } from "lucide-react";
 import { Button } from "./ui/button";
+import { useOutletContext } from "react-router";
 
-const POMODORO_TIME = 25 * 60; // 25 dakika
 const SHORT_BREAK = 5 * 60; // 5 dakika
 const LONG_BREAK = 15 * 60; // 15 dakika
 
-type TimerMode = "pomodoro" | "short" | "long";
+type TimerMode = "pomodoro" | "short" | "long" | "stopwatch";
 
 export function TimerPage() {
+  const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
   const [mode, setMode] = useState<TimerMode>("pomodoro");
-  const [timeLeft, setTimeLeft] = useState(POMODORO_TIME);
+  const [customMinutes, setCustomMinutes] = useState(25); // Kullanıcının girdiği süre
+  const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
   const [completedPomodoros, setCompletedPomodoros] = useState(0);
   const [subject, setSubject] = useState("");
@@ -18,28 +20,44 @@ export function TimerPage() {
 
   const totalTime =
     mode === "pomodoro"
-      ? POMODORO_TIME
+      ? customMinutes * 60
       : mode === "short"
       ? SHORT_BREAK
-      : LONG_BREAK;
+      : mode === "long"
+      ? LONG_BREAK
+      : 0; // Kronometre için total time yok
 
-  const progress = ((totalTime - timeLeft) / totalTime) * 100;
+  // Kronometre modunda progress hesaplama
+  const progress = mode === "stopwatch" 
+    ? 0 
+    : totalTime > 0 
+    ? ((totalTime - timeLeft) / totalTime) * 100 
+    : 0;
+    
   const radius = 120;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (progress / 100) * circumference;
 
   useEffect(() => {
-    if (isRunning && timeLeft > 0) {
-      intervalRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            setIsRunning(false);
-            handleComplete();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    if (isRunning) {
+      if (mode === "stopwatch") {
+        // Kronometre modu - yukarı say
+        intervalRef.current = setInterval(() => {
+          setTimeLeft((prev) => prev + 1);
+        }, 1000);
+      } else if (timeLeft > 0) {
+        // Normal timer - aşağı say
+        intervalRef.current = setInterval(() => {
+          setTimeLeft((prev) => {
+            if (prev <= 1) {
+              setIsRunning(false);
+              handleComplete();
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }
     }
 
     return () => {
@@ -47,7 +65,7 @@ export function TimerPage() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isRunning, timeLeft]);
+  }, [isRunning, timeLeft, mode]);
 
   const handleComplete = () => {
     if (mode === "pomodoro") {
@@ -58,7 +76,7 @@ export function TimerPage() {
       const sessions = JSON.parse(localStorage.getItem("pomodoroSessions") || "[]");
       sessions.push({
         date: new Date().toISOString(),
-        duration: POMODORO_TIME,
+        duration: customMinutes * 60,
         subject: subject || "Diğer",
       });
       localStorage.setItem("pomodoroSessions", JSON.stringify(sessions));
@@ -85,10 +103,12 @@ export function TimerPage() {
     setIsRunning(false);
     const newTime =
       newMode === "pomodoro"
-        ? POMODORO_TIME
+        ? customMinutes * 60
         : newMode === "short"
         ? SHORT_BREAK
-        : LONG_BREAK;
+        : newMode === "long"
+        ? LONG_BREAK
+        : 0; // Kronometre için total time yok
     setTimeLeft(newTime);
   };
 
@@ -103,23 +123,39 @@ export function TimerPage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
       {/* Mod Seçimi */}
-      <div className="flex gap-3 mb-12">
+      <div className="flex gap-3 mb-6">
         <button
           onClick={() => changeMode("pomodoro")}
           className={`px-6 py-2 rounded-full transition-all ${
             mode === "pomodoro"
               ? "bg-red-500 text-white shadow-lg"
-              : "bg-white/10 text-white hover:bg-white/20"
+              : isDarkMode
+              ? "bg-white/10 text-white hover:bg-white/20"
+              : "bg-slate-800/10 text-slate-800 hover:bg-slate-800/20"
           }`}
         >
           Pomodoro
+        </button>
+        <button
+          onClick={() => changeMode("stopwatch")}
+          className={`px-6 py-2 rounded-full transition-all ${
+            mode === "stopwatch"
+              ? "bg-purple-500 text-white shadow-lg"
+              : isDarkMode
+              ? "bg-white/10 text-white hover:bg-white/20"
+              : "bg-slate-800/10 text-slate-800 hover:bg-slate-800/20"
+          }`}
+        >
+          Kronometre
         </button>
         <button
           onClick={() => changeMode("short")}
           className={`px-6 py-2 rounded-full transition-all ${
             mode === "short"
               ? "bg-green-500 text-white shadow-lg"
-              : "bg-white/10 text-white hover:bg-white/20"
+              : isDarkMode
+              ? "bg-white/10 text-white hover:bg-white/20"
+              : "bg-slate-800/10 text-slate-800 hover:bg-slate-800/20"
           }`}
         >
           Kısa Mola
@@ -129,7 +165,9 @@ export function TimerPage() {
           className={`px-6 py-2 rounded-full transition-all ${
             mode === "long"
               ? "bg-blue-500 text-white shadow-lg"
-              : "bg-white/10 text-white hover:bg-white/20"
+              : isDarkMode
+              ? "bg-white/10 text-white hover:bg-white/20"
+              : "bg-slate-800/10 text-slate-800 hover:bg-slate-800/20"
           }`}
         >
           Uzun Mola
@@ -138,27 +176,53 @@ export function TimerPage() {
 
       {/* Ders Seçimi */}
       {mode === "pomodoro" && (
-        <div className="mb-6 w-full max-w-md">
-          <input
-            type="text"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            placeholder="Ders adı girin (örn: Matematik, İngilizce...)"
-            className="w-full bg-white/10 text-white placeholder-white/40 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
-            disabled={isRunning}
-          />
+        <div className="mb-4 w-full max-w-2xl">
+          <div className="flex gap-3 items-center justify-center">
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Ders adı girin (örn: Matematik, İngilizce...)"
+              className={`flex-1 max-w-md border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center ${
+                isDarkMode
+                  ? "bg-white/10 text-white placeholder-white/40 border-white/20"
+                  : "bg-white text-slate-900 placeholder-slate-400 border-slate-300"
+              }`}
+              disabled={isRunning}
+            />
+            <input
+              type="number"
+              min="1"
+              max="120"
+              value={customMinutes}
+              onChange={(e) => {
+                const newMinutes = parseInt(e.target.value) || 1;
+                setCustomMinutes(newMinutes);
+                if (!isRunning) {
+                  setTimeLeft(newMinutes * 60);
+                }
+              }}
+              placeholder="Süre (dakika)"
+              className={`w-40 border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center ${
+                isDarkMode
+                  ? "bg-white/10 text-white placeholder-white/40 border-white/20"
+                  : "bg-white text-slate-900 placeholder-slate-400 border-slate-300"
+              }`}
+              disabled={isRunning}
+            />
+          </div>
         </div>
       )}
 
       {/* Dairesel Timer */}
-      <div className="relative mb-12">
+      <div className="relative mb-6">
         <svg width="300" height="300" className="transform -rotate-90">
           {/* Arka plan çemberi */}
           <circle
             cx="150"
             cy="150"
             r={radius}
-            stroke="rgba(255, 255, 255, 0.1)"
+            stroke={isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"}
             strokeWidth="12"
             fill="none"
           />
@@ -178,10 +242,14 @@ export function TimerPage() {
         </svg>
         {/* Süre göstergesi */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="text-6xl font-bold text-white mb-2">
+          <div className={`text-6xl font-bold mb-2 ${
+            isDarkMode ? "text-white" : "text-black"
+          }`}>
             {formatTime(timeLeft)}
           </div>
-          <div className="text-white/60 text-sm">
+          <div className={`text-sm ${
+            isDarkMode ? "text-white/60" : "text-black/60"
+          }`}>
             {completedPomodoros} pomodoro tamamlandı
           </div>
         </div>
@@ -214,7 +282,11 @@ export function TimerPage() {
           onClick={resetTimer}
           size="lg"
           variant="outline"
-          className="px-8 py-6 text-lg rounded-2xl bg-white/10 text-white border-white/20 hover:bg-white/20"
+          className={`px-8 py-6 text-lg rounded-2xl ${
+            isDarkMode
+              ? "bg-white/10 text-white border-white/20 hover:bg-white/20"
+              : "bg-slate-100 text-slate-900 border-slate-300 hover:bg-slate-200"
+          }`}
         >
           <RotateCcw className="w-6 h-6 mr-2" />
           Sıfırla
