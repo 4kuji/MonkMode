@@ -3,6 +3,7 @@
 
 import re
 import requests
+import json
 
 
 def ask_ollama(prompt, model="llama3.1:8b"):
@@ -28,16 +29,15 @@ def ask_ollama(prompt, model="llama3.1:8b"):
         return f"Hata oluştu: {e}"
 
 
+# 🔹 TEXT CLEANING
 def clean_response(text):
     text = text.strip()
 
     sentences = re.split(r'(?<=[.!?])\s+', text)
     sentences = [s.strip() for s in sentences if s.strip()]
 
-    # sadece ilk 2 cümle
     final_sentences = sentences[:2]
 
-    # tek cümle gelirse ikinciyi ekle
     if len(final_sentences) == 1:
         final_sentences.append(
             "Çalışmanın sonunda birkaç soru çözerek öğrendiğin konuyu pekiştir."
@@ -52,6 +52,7 @@ def safe_clean(text):
     return text
 
 
+# 🔹 AI RESPONSE
 def generate_ai_response(user_message, user_stats):
 
     stats_text = f"""
@@ -92,14 +93,66 @@ Cevap:
     return safe_clean(cleaned)
 
 
-# TEST (isteğe bağlı)
+# 🔥 PLAN OPTIMIZATION (ASLI BURASI)
+def optimize_plan(plan, user_stats):
+
+    best_hours = user_stats.get("best_hours", []).copy()
+    hard_lessons = user_stats.get("hard_lessons", [])
+
+    for item in plan:
+        if item["ders"] in hard_lessons:
+            if best_hours:
+                item["saat"] = best_hours.pop(0)
+
+    return plan
+
+
+# 🔥 JSON STUDY PLAN
+def generate_study_plan(user_message, user_stats):
+
+    prompt = f"""
+Bir çalışma planı oluştur.
+
+Sadece JSON ver.
+
+Örnek:
+[
+  {{"gun":"Pazartesi","saat":"18:00","ders":"Matematik"}},
+  {{"gun":"Çarşamba","saat":"20:00","ders":"Fizik"}}
+]
+
+Kullanıcı isteği:
+{user_message}
+
+JSON:
+"""
+
+    raw = ask_ollama(prompt)
+
+    try:
+        parsed = json.loads(raw)
+    except:
+        print("JSON parse hatası!")
+        return raw
+
+    optimized = optimize_plan(parsed, user_stats)
+
+    return optimized
+
+
+# 🔥 TEST
 if __name__ == "__main__":
-    print(generate_ai_response(
-        "Bugün hiç çalışmadım",
-        {
-            "today_focus_time": 0,
-            "weekly_avg": 100,
-            "last_session": "dün",
-            "completed_tasks": 1
-        }
-    ))
+
+    print("\n--- STUDY PLAN TEST ---")
+
+    user_stats = {
+        "best_hours": ["20:00", "21:00"],
+        "hard_lessons": ["Matematik"]
+    }
+
+    result = generate_study_plan(
+        "Haftaya 3 gün matematik ve fizik çalışmak istiyorum",
+        user_stats
+    )
+
+    print(result)
