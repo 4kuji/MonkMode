@@ -33,6 +33,9 @@ def ask_ollama(prompt, model="llama3.1:8b"):
 def clean_response(text):
     text = text.strip()
 
+    if "konuya dönelim" in text:
+        return text
+
     sentences = re.split(r'(?<=[.!?])\s+', text)
     sentences = [s.strip() for s in sentences if s.strip()]
 
@@ -65,6 +68,9 @@ Tamamlanan görev: {user_stats.get('completed_tasks', 0)}
     prompt = f"""
 Sen MonkMode uygulamasının disiplinli ama saygılı bir verimlilik koçusun.
 
+GÖREV:
+- Kullanıcı eğer ders, çalışma veya verimlilikle ilgili konuşuyorsa tavsiye ver.
+- EĞER kullanıcı ders dışı (yemek,oyun,magazin vb.) bir şey yazarsa diğer kuralları boşver ve tam olarak şu cevabı ver: "Ben bir verimlilik koçuyum, lütfen konuya dönelim."
 Kullanıcı verileri:
 {stats_text}
 
@@ -154,5 +160,14 @@ if __name__ == "__main__":
         "Haftaya 3 gün matematik ve fizik çalışmak istiyorum",
         user_stats
     )
+
+    print("\n--- GUARDRAIL TESTİ ---")
+    user_stats_simple = {"today_focus_time": 10}
+    
+    # Test 1: Ders dışı
+    print("Yemek sorusu cevabı:", generate_ai_response("Bana pizza tarifi ver", user_stats_simple))
+    
+    # Test 2: Ders içi
+    print("Ders sorusu cevabı:", generate_ai_response("Matematik çok zor geliyor", user_stats_simple))
 
     print(result)

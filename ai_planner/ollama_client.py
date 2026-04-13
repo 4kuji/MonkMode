@@ -29,7 +29,8 @@ Görev:
 - JSON anahtarlarını değiştirme
 - Sadece geçerli JSON döndür
 - JSON dışında hiçbir şey yazma
-
+- Eğer kategori 'ders' veya 'sınav' ile ilgili değilse (yemek,oyun vb.), motivasyon_tavsiyesi olarak "Ben verimlilik koçuyum, lütfen konuya dönelim." yaz.
+- İlgiliyse normal tavsiyelerini ver.
 JSON formatı tam olarak şu olsun:
 {{
   "motivasyon_tavsiyesi": "...",
