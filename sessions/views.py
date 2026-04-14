@@ -3,6 +3,11 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from .models import CustomUser, Category, FocusSession
 from django.db.models import Sum
+import os.path
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
 
 @csrf_exempt
 def register_user(request):
@@ -137,3 +142,111 @@ def chat_with_ai(request):
 
     # Biri bu kapıya POST yerine GET (veri çekme) isteğiyle gelirse kapıdan çevir
     return JsonResponse({"error": "Hatalı giriş! Bu kapıdan sadece POST metodu ile mesaj gönderilebilir."}, status=405)
+
+# Google'dan sadece takvime etkinlik ekleme izni istiyoruz
+SCOPES = ['https://www.googleapis.com/auth/calendar.events']
+
+@csrf_exempt
+def sync_calendar(request):
+    """
+    Yapay zekanın ürettiği çalışma planını GERÇEK Google Takvim'e aktaran ana köprü.
+    """
+    if request.method == 'POST':
+        try:
+            body_unicode = request.body.decode('utf-8')
+            body_data = json.loads(body_unicode)
+            plan_data = body_data.get('plan', [])
+
+            if not plan_data:
+                return JsonResponse({"error": "Plan verisi boş olamaz!"}, status=400)
+
+            # --- 1. GOOGLE KİMLİK DOĞRULAMA (OAUTH) ---
+            creds = None
+            
+            # Daha önce yetki verdiysek, o bileti (token) kullan
+            if os.path.exists('token.json'):
+                creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+            
+            # Eğer geçerli bir bilet yoksa, İZİN EKRANINI AÇ!
+            if not creds or not creds.valid:
+                if creds and creds.expired and creds.refresh_token:
+                    creds.refresh(Request())
+                else:
+                    # İşte o meşhur izin ekranını bilgisayarında açacak olan satır:
+                    flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+                    creds = flow.run_local_server(port=0)
+                
+                # Gelecek sefer sormaması için bileti kaydet
+                with open('token.json', 'w') as token:
+                    token.write(creds.to_json())
+
+            # --- 2. TAKVİME GERÇEK VERİ YAZMA İŞLEMİ ---
+            service = build('calendar', 'v3', credentials=creds)
+            basarili_kayit = 0
+
+            for task in plan_data:
+                event = {
+                  'summary': task.get('title', 'MonkMode Odak Seansı'),
+                  'description': 'MonkMode AI Koçu tarafından planlandı. 🚀',
+                  'start': {
+                    'dateTime': task.get('start_time'), 
+                    'timeZone': 'Europe/Istanbul',
+                  },
+                  'end': {
+                    'dateTime': task.get('end_time'),
+                    'timeZone': 'Europe/Istanbul',
+                  },
+                }
+                # Google Takvime fırlat!
+                service.events().insert(calendarId='primary', body=event).execute()
+                basarili_kayit += 1
+
+            return JsonResponse({
+                "status": "success", 
+                "message": f"Muazzam! {basarili_kayit} adet çalışma seansı GERÇEK Google Takviminize eklendi. ✅"
+            }, status=200)
+
+        except Exception as e:
+            return JsonResponse({"error": f"Google ile bağlantı kurulamadı: {str(e)}"}, status=500)
+
+    return JsonResponse({"error": "Sadece POST istekleri kabul edilir."}, status=405)
+
+#dashborad api
+@csrf_exempt
+def get_dashboard_data(request):
+    """
+    HAFTA 7: Ana Ekran (Dashboard) Veri Paketi
+    Veritabanındaki gerçek odaklanma sürelerini hesaplar ve Frontend'e fırlatır.
+    """
+    if request.method == 'GET':
+        try:
+            # 1. Veritabanındaki tüm seansların dakikalarını topla
+            toplam_sure_sozlugu = FocusSession.objects.aggregate(Sum('duration_minutes'))
+            toplam_dakika = toplam_sure_sozlugu['duration_minutes__sum']
+            
+            # Eğer veritabanı boşsa (henüz seans yoksa) hata vermesin, 0 dönsün
+            if toplam_dakika is None:
+                toplam_dakika = 0
+
+            # 2. Şura'nın (AI) günün sözü için dinamik bir yapı
+            if toplam_dakika == 0:
+                ai_mesaji = "Daha hiç çalışmamışsın liderim! Başlamak için harika bir gün. 🚀"
+            elif toplam_dakika > 100:
+                ai_mesaji = "100 dakikayı devirdin! Muazzam bir odaklanma, böyle devam et! 🔥"
+            else:
+                ai_mesaji = f"Şu ana kadar {toplam_dakika} dakika odaklandın. Temponu bozma! 🧠"
+
+            # 3. Paketi topla ve Sırdaş'a (Frontend) fırlat!
+            dashboard_data = {
+                "total_focus_minutes": toplam_dakika,
+                "most_productive_category": "Backend Geliştirme",
+                "active_streak_days": 1,
+                "daily_ai_quote": ai_mesaji
+            }
+            
+            return JsonResponse({"status": "success", "data": dashboard_data}, status=200)
+
+        except Exception as e:
+            return JsonResponse({"error": f"Veritabanı hatası: {str(e)}"}, status=500)
+    
+    return JsonResponse({"error": "Sadece GET istekleri kabul edilir."}, status=405)

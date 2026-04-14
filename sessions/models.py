@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.conf import settings
 
 # 1. KULLANICI YÖNETİCİSİ (Sisteme Email ile kayıt olmak için bel kemiği)
 class CustomUserManager(BaseUserManager):
@@ -42,15 +43,18 @@ class Category(models.Model):
         return f"{self.user.email} - {self.name}"
 
 # 4. ODAKLANMA SEANSI TABLOSU (Sistemdeki ana veri havuzumuz)
+
+
+
 class FocusSession(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, verbose_name="Kullanıcı")
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Kategori")
-    
-    duration_minutes = models.PositiveIntegerField(verbose_name="Odaklanma Süresi (Dakika)")
-    start_time = models.DateTimeField(verbose_name="Başlangıç Zamanı")
-    end_time = models.DateTimeField(verbose_name="Bitiş Zamanı")
-    notes = models.TextField(blank=True, null=True, verbose_name="Seans Notları")
-    
+    """
+    Kullanıcıların odaklanma seanslarını tutan ana veritabanı tablosu.
+    """
+    # Burada direkt User yerine settings.AUTH_USER_MODEL kullanıyoruz!
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
+    category = models.CharField(max_length=100, default="Genel Çalışma")
+    duration_minutes = models.IntegerField(default=0)
+    date = models.DateField(auto_now_add=True)
+
     def __str__(self):
-        kategori_adi = self.category.name if self.category else "Kategorisiz"
-        return f"{self.user.email} | {kategori_adi} | {self.duration_minutes} dk"
+        return f"{self.category} - {self.duration_minutes} dk"
