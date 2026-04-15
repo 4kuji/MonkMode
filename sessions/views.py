@@ -8,6 +8,8 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 
 @csrf_exempt
 def register_user(request):
@@ -146,7 +148,8 @@ def chat_with_ai(request):
 # Google'dan sadece takvime etkinlik ekleme izni istiyoruz
 SCOPES = ['https://www.googleapis.com/auth/calendar.events']
 
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def sync_calendar(request):
     """
     Yapay zekanın ürettiği çalışma planını GERÇEK Google Takvim'e aktaran ana köprü.
@@ -212,7 +215,8 @@ def sync_calendar(request):
     return JsonResponse({"error": "Sadece POST istekleri kabul edilir."}, status=405)
 
 #dashborad api
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_dashboard_data(request):
     """
     HAFTA 7: Ana Ekran (Dashboard) Veri Paketi

@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     'sessions',
     'analytics',
     'ai_planner',
+    'rest_framework',
+    'rest_framework_simplejwt',
 ]
 
 MIDDLEWARE = [
@@ -122,3 +124,8 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 
 
 AUTH_USER_MODEL = 'my_sessions.CustomUser'
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    )
+}
