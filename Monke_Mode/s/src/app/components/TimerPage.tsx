@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Play, Pause, RotateCcw } from "lucide-react";
+import { Play, Pause, RotateCcw, Minimize2, Maximize2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { useOutletContext } from "react-router";
 
@@ -16,6 +16,7 @@ export function TimerPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [completedPomodoros, setCompletedPomodoros] = useState(0);
   const [subject, setSubject] = useState("");
+  const [isFocusMode, setIsFocusMode] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const totalTime =
@@ -120,8 +121,109 @@ export function TimerPage() {
       .padStart(2, "0")}`;
   };
 
+  // Focus mode ise minimal görünüm
+  if (isFocusMode) {
+    return (
+      <div className={`fixed inset-0 z-50 flex flex-col items-center justify-center transition-colors duration-300 ${
+        isDarkMode 
+          ? "bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900" 
+          : "bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50"
+      }`}>
+        {/* Çıkış butonu */}
+        <button
+          onClick={() => setIsFocusMode(false)}
+          className={`absolute top-8 right-8 p-3 rounded-full transition-all ${
+            isDarkMode
+              ? "bg-white/10 text-white hover:bg-white/20"
+              : "bg-slate-800/10 text-slate-800 hover:bg-slate-800/20"
+          }`}
+          aria-label="Normal görünüme dön"
+        >
+          <Maximize2 className="w-6 h-6" />
+        </button>
+
+        {/* Dairesel Timer */}
+        <div className="relative mb-12">
+          <svg width="400" height="400" className="transform -rotate-90">
+            {/* Arka plan çemberi */}
+            <circle
+              cx="200"
+              cy="200"
+              r={160}
+              stroke={isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"}
+              strokeWidth="16"
+              fill="none"
+            />
+            {/* İlerleme çemberi */}
+            <circle
+              cx="200"
+              cy="200"
+              r={160}
+              stroke="#22c55e"
+              strokeWidth="16"
+              fill="none"
+              strokeDasharray={2 * Math.PI * 160}
+              strokeDashoffset={2 * Math.PI * 160 - (progress / 100) * 2 * Math.PI * 160}
+              strokeLinecap="round"
+              className="transition-all duration-1000 ease-linear"
+            />
+          </svg>
+          {/* Süre göstergesi */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <div className={`text-8xl font-bold ${
+              isDarkMode ? "text-white" : "text-black"
+            }`}>
+              {formatTime(timeLeft)}
+            </div>
+          </div>
+        </div>
+
+        {/* Kontrol Butonları */}
+        <div className="flex gap-6">
+          <Button
+            onClick={toggleTimer}
+            size="lg"
+            className={`px-12 py-8 text-2xl rounded-3xl shadow-2xl ${
+              isRunning
+                ? "bg-yellow-500 hover:bg-yellow-600"
+                : "bg-green-500 hover:bg-green-600"
+            } text-white`}
+          >
+            {isRunning ? (
+              <>
+                <Pause className="w-8 h-8 mr-3" />
+                Durdur
+              </>
+            ) : (
+              <>
+                <Play className="w-8 h-8 mr-3" />
+                Başlat
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
+      {/* Focus Mode Toggle Butonu */}
+      <div className="absolute top-4 right-4">
+        <button
+          onClick={() => setIsFocusMode(true)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
+            isDarkMode
+              ? "bg-white/10 text-white hover:bg-white/20"
+              : "bg-slate-800/10 text-slate-800 hover:bg-slate-800/20"
+          }`}
+          aria-label="Odaklanma modu"
+        >
+          <Minimize2 className="w-5 h-5" />
+          <span className="text-sm">Odaklanma</span>
+        </button>
+      </div>
+
       {/* Mod Seçimi */}
       <div className="flex gap-3 mb-6">
         <button

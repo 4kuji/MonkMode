@@ -1,5 +1,3 @@
-// birşeye tıklayınca  açılır kapanır panel
-
 "use client";
 
 import * as React from "react";
