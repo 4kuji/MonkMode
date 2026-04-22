@@ -49,7 +49,7 @@ JSON formatı tam olarak şu olsun:
         response = requests.post(
             OLLAMA_URL,
             json=payload,
-            timeout=10   # hocanın istediği timeout
+            timeout=10   
         )
 
         response.raise_for_status()
