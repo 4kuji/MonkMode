@@ -11,8 +11,17 @@ export function LoginPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Gerçek authentication mantığı eklenecek
+    //  Gerçek authentication mantığı ekle
     console.log("Login attempt:", { email, password });
+
+      
+    const userData = {
+      name: email.split("@")[0], // Email'den isim oluştur 
+      email,
+      joinDate: new Date().toISOString(),
+    };
+    localStorage.setItem("user", JSON.stringify(userData));
+
     // Başarılı giriş sonrası ana sayfaya yönlendir
     navigate("/");
   };

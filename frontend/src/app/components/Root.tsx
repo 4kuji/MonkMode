@@ -1,11 +1,13 @@
 import { Outlet, Link, useLocation } from "react-router";
-import { Timer, BarChart3, Brain, UserPlus, LogIn, Sun, Moon } from "lucide-react";
+import { Timer, BarChart3, Brain, UserPlus, LogIn, Sun, Moon, Minimize2, User } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export function Root() {
   const location = useLocation();
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isFocusMode, setIsFocusMode] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userPhoto, setUserPhoto] = useState<string | null>(null);
 
   // localStorage'dan tema tercihini yükle
   useEffect(() => {
@@ -13,7 +15,17 @@ export function Root() {
     if (savedTheme === "light") {
       setIsDarkMode(false);
     }
-  }, []);
+
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      setIsLoggedIn(true);
+      const user = JSON.parse(userStr);
+      setUserPhoto(user.profilePhoto || null);
+    } else {
+      setIsLoggedIn(false);
+      setUserPhoto(null);
+    }
+  }, [location.pathname]);
 
   // Tema değiştiğinde localStorage'a kaydet
   const toggleTheme = () => {
@@ -76,6 +88,30 @@ export function Root() {
 
           {/* Auth butonları - Sağ üst köşe */}
           <div className="absolute top-0 right-0 flex gap-3">
+            {isLoggedIn ? (
+            <Link
+              to="/profil"
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all ${
+                location.pathname === "/profil"
+                  ? "bg-green-500 text-white"
+                  : isDarkMode
+                  ? "bg-white/10 text-white hover:bg-white/20"
+                  : "bg-slate-800/10 text-slate-800 hover:bg-slate-800/20"
+              }`}
+           >
+            <div className={`w-6 h-6 rounded-full overflow-hidden flex items-center justify-center ${
+               !userPhoto && (isDarkMode ? "bg-green-500/30" : "bg-green-500/20")
+            }`}>
+              {userPhoto ? (
+                 <img src={userPhoto} alt="Profil" className="w-full h-full object-cover" />
+               ) : (
+                <User className="w-4 h-4" />
+              )}
+            </div>
+            <span>Profil</span>
+          </Link>
+        ) : (
+          <>
             <Link
               to="/giris-yap"
               className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
@@ -94,6 +130,8 @@ export function Root() {
               <UserPlus className="w-4 h-4" />
               Kayıt Ol
             </Link>
+            </>
+            )}
           </div>
 
           {/* Logo ve Başlık */}
@@ -130,7 +168,7 @@ export function Root() {
           </nav>
         </header>
         <main>
-          <Outlet context={{ isDarkMode }} />
+           <Outlet context={{ isDarkMode, isFocusMode, setIsFocusMode }} />
         </main>
       </div>
     </div>

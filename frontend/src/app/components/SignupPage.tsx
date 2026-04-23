@@ -22,6 +22,14 @@ export function SignupPage() {
 
     // TODO: Gerçek authentication mantığı eklenecek
     console.log("Signup attempt:", { name, email, password });
+    // Kullanıcıyı localStorage'a kaydet
+    const userData = {
+      name,
+      email,
+      joinDate: new Date().toISOString(),
+    };
+    localStorage.setItem("user", JSON.stringify(userData));
+    
     // Başarılı kayıt sonrası ana sayfaya yönlendir
     navigate("/");
   };
