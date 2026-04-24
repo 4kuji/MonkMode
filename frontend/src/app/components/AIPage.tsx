@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User } from "lucide-react";
+import { Send, Bot, User, AlertCircle } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { useOutletContext } from "react-router";
+import { useOutletContext, useNavigate } from "react-router";
+import { sendChatMessage, isAuthenticated } from "../../services/api";
 
 interface Message {
   role: "user" | "assistant";
@@ -11,6 +12,7 @@ interface Message {
 
 export function AIPage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -20,6 +22,7 @@ export function AIPage() {
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -29,6 +32,13 @@ export function AIPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Check authentication on mount
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      navigate("/giris-yap");
+    }
+  }, [navigate]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -41,46 +51,34 @@ export function AIPage() {
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
+    setError("");
 
-    // Simüle edilmiş AI yanıtı
-    setTimeout(() => {
-      const aiResponse = generateResponse(input);
+    try {
+      const data = await sendChatMessage(input);
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: aiResponse,
+          content: data.response,
         },
       ]);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "AI yanıtı alınamadı.";
+      if (message === "UNAUTHORIZED") {
+        navigate("/giris-yap");
+        return;
+      }
+      setError(message);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.",
+        },
+      ]);
+    } finally {
       setIsLoading(false);
-    }, 1000);
-  };
-
-  const generateResponse = (userInput: string): string => {
-    const input = userInput.toLowerCase();
-
-    if (input.includes("pomodoro") || input.includes("teknik")) {
-      return "Pomodoro Tekniği, 25 dakikalık odaklanma süreleri ve kısa molalarla verimliliği artırmak için harika bir yöntemdir. İşte bazı ipuçları:\n\n1. Her pomodoro süresinde tek bir göreve odaklanın\n2. Molalarda ekrandan uzaklaşın ve hareket edin\n3. 4 pomodoro'dan sonra 15-30 dakika uzun mola verin\n4. İlerlemenizi takip edin ve kendinizi ödüllendirin";
     }
-
-    if (input.includes("odaklan") || input.includes("dikkat")) {
-      return "Odaklanmayı artırmak için şu yöntemleri deneyebilirsiniz:\n\n• Çalışma ortamınızı düzenleyin ve dikkat dağıtıcıları ortadan kaldırın\n• Telefonunuzu sessiz moda alın veya başka bir odaya koyun\n• Çalışmadan önce net hedefler belirleyin\n• Düzenli molalar verin ve su için\n• Dinlendirici müzik veya beyaz gürültü kullanın";
-    }
-
-    if (input.includes("motivasyon") || input.includes("başlangıç")) {
-      return "Motivasyon bulmak zor olabilir, ancak şu stratejiler yardımcı olabilir:\n\n• Büyük görevleri küçük parçalara bölün\n• İlk 5 dakika için kendinizi zorlayın - çoğu zaman bu momentum yaratır\n• Gelecekteki kendinize bir iyilik yapıyor olduğunuzu düşünün\n• Küçük başarılarınızı kutlayın\n• Neden bu işi yaptığınızı hatırlayın";
-    }
-
-    if (input.includes("mola") || input.includes("dinlen")) {
-      return "Molalar verimlilik için çok önemlidir! Etkili molalar için:\n\n• Ekrandan uzaklaşın ve gözlerinizi dinlendirin\n• Biraz yürüyün veya hafif egzersiz yapın\n• Su için ve hafif atıştırmalıklar tüketin\n• Sosyal medyadan kaçının - bu beyninizi dinlendirmez\n• Derin nefes alın veya meditasyon yapın";
-    }
-
-    if (input.includes("teşekkür") || input.includes("sağol")) {
-      return "Rica ederim! Size yardımcı olabildiğim için mutluyum. Başka bir sorunuz olursa her zaman buradayım. 💜";
-    }
-
-    // Varsayılan yanıt
-    return "İlginç bir soru! Pomodoro tekniği, odaklanma, motivasyon, verimlilik ve zaman yönetimi konularında size daha iyi yardımcı olabilirim. Bu konular hakkında spesifik bir sorunuz var mı?";
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -95,6 +93,14 @@ export function AIPage() {
       <h2 className={`text-3xl font-bold mb-8 ${
         isDarkMode ? "text-white" : "text-black"
       }`}>Yapay Zeka Asistanı</h2>
+
+      {/* Error banner */}
+      {error && (
+        <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+          <p className="text-sm text-red-400">{error}</p>
+        </div>
+      )}
 
       <Card className={`flex flex-col h-[calc(100vh-300px)] ${
         isDarkMode 

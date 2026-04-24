@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useOutletContext, Link, useNavigate } from "react-router";
-import { UserPlus, Mail, Lock, User } from "lucide-react";
+import { UserPlus, Mail, Lock, User, AlertCircle } from "lucide-react";
 import { Button } from "./ui/button";
+import { registerUser } from "../../services/api";
 
 export function SignupPage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
@@ -10,28 +11,31 @@ export function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setError("");
+
     // Şifre kontrolü
     if (password !== confirmPassword) {
-      alert("Şifreler eşleşmiyor!");
+      setError("Şifreler eşleşmiyor!");
       return;
     }
 
-    // TODO: Gerçek authentication mantığı eklenecek
-    console.log("Signup attempt:", { name, email, password });
-    // Kullanıcıyı localStorage'a kaydet
-    const userData = {
-      name,
-      email,
-      joinDate: new Date().toISOString(),
-    };
-    localStorage.setItem("user", JSON.stringify(userData));
-    
-    // Başarılı kayıt sonrası ana sayfaya yönlendir
-    navigate("/");
+    setIsLoading(true);
+
+    try {
+      await registerUser(name, email, password);
+      // Başarılı kayıt sonrası ana sayfaya yönlendir (tokens already stored by registerUser)
+      navigate("/");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Kayıt işlemi başarısız.";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -72,6 +76,14 @@ export function SignupPage() {
           </p>
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+            <p className="text-sm text-red-400">{error}</p>
+          </div>
+        )}
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Name Input */}
@@ -97,11 +109,12 @@ export function SignupPage() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Adınız Soyadınız"
                 required
+                disabled={isLoading}
                 className={`w-full pl-11 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-green-500 transition-all ${
                   isDarkMode
                     ? "bg-white/10 text-white placeholder-white/40 border-white/20"
                     : "bg-white text-slate-900 placeholder-slate-400 border-slate-300"
-                }`}
+                } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
               />
             </div>
           </div>
@@ -129,11 +142,12 @@ export function SignupPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="ornek@email.com"
                 required
+                disabled={isLoading}
                 className={`w-full pl-11 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-green-500 transition-all ${
                   isDarkMode
                     ? "bg-white/10 text-white placeholder-white/40 border-white/20"
                     : "bg-white text-slate-900 placeholder-slate-400 border-slate-300"
-                }`}
+                } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
               />
             </div>
           </div>
@@ -162,11 +176,12 @@ export function SignupPage() {
                 placeholder="••••••••"
                 required
                 minLength={6}
+                disabled={isLoading}
                 className={`w-full pl-11 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-green-500 transition-all ${
                   isDarkMode
                     ? "bg-white/10 text-white placeholder-white/40 border-white/20"
                     : "bg-white text-slate-900 placeholder-slate-400 border-slate-300"
-                }`}
+                } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
               />
             </div>
           </div>
@@ -195,11 +210,12 @@ export function SignupPage() {
                 placeholder="••••••••"
                 required
                 minLength={6}
+                disabled={isLoading}
                 className={`w-full pl-11 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-green-500 transition-all ${
                   isDarkMode
                     ? "bg-white/10 text-white placeholder-white/40 border-white/20"
                     : "bg-white text-slate-900 placeholder-slate-400 border-slate-300"
-                }`}
+                } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
               />
             </div>
           </div>
@@ -207,9 +223,22 @@ export function SignupPage() {
           {/* Submit Button */}
           <Button
             type="submit"
-            className="w-full py-3 rounded-xl bg-green-500 hover:bg-green-600 text-white font-semibold text-lg transition-all shadow-lg"
+            disabled={isLoading}
+            className={`w-full py-3 rounded-xl bg-green-500 hover:bg-green-600 text-white font-semibold text-lg transition-all shadow-lg ${
+              isLoading ? "opacity-70 cursor-not-allowed" : ""
+            }`}
           >
-            Kayıt Ol
+            {isLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Kayıt yapılıyor...
+              </span>
+            ) : (
+              "Kayıt Ol"
+            )}
           </Button>
         </form>
 

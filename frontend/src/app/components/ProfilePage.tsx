@@ -3,11 +3,12 @@ import { User, Mail, LogOut, Calendar, Award, Camera } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { useEffect, useState, useRef } from "react";
+import { isAuthenticated, logoutUser } from "../../services/api";
 
 interface UserData {
   name: string;
   email: string;
-  joinDate: string;
+  joinDate?: string;
   profilePhoto?: string;
 }
 
@@ -25,12 +26,30 @@ export function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // Token-based auth check
+    if (!isAuthenticated()) {
+      navigate("/giris-yap");
+      return;
+    }
+
     const userData = localStorage.getItem("user");
     if (!userData) {
       navigate("/giris-yap");
       return;
     }
-    setUser(JSON.parse(userData));
+
+    try {
+      const parsed = JSON.parse(userData);
+      setUser({
+        name: parsed.name || "Kullanıcı",
+        email: parsed.email || "",
+        joinDate: parsed.joinDate || new Date().toISOString(),
+        profilePhoto: parsed.profilePhoto,
+      });
+    } catch {
+      navigate("/giris-yap");
+      return;
+    }
 
     const saved = localStorage.getItem("pomodoroSessions");
     if (saved) {
@@ -39,7 +58,7 @@ export function ProfilePage() {
   }, [navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
+    logoutUser();
     navigate("/");
   };
 
@@ -142,14 +161,16 @@ export function ProfilePage() {
               <Mail className="w-4 h-4" />
               {user.email}
             </div>
-            <div
-              className={`flex items-center gap-2 text-sm mt-1 ${
-                isDarkMode ? "text-white/60" : "text-black/60"
-              }`}
-            >
-              <Calendar className="w-4 h-4" />
-              Katılma: {new Date(user.joinDate).toLocaleDateString("tr-TR")}
-            </div>
+            {user.joinDate && (
+              <div
+                className={`flex items-center gap-2 text-sm mt-1 ${
+                  isDarkMode ? "text-white/60" : "text-black/60"
+                }`}
+              >
+                <Calendar className="w-4 h-4" />
+                Katılma: {new Date(user.joinDate).toLocaleDateString("tr-TR")}
+              </div>
+            )}
           </div>
         </div>
 

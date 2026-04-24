@@ -1,29 +1,38 @@
-import { Outlet, Link, useLocation } from "react-router";
+import { Outlet, Link, useLocation, useNavigate } from "react-router";
 import { Timer, BarChart3, Brain, UserPlus, LogIn, Sun, Moon, Minimize2, User } from "lucide-react";
 import { useState, useEffect } from "react";
+import { isAuthenticated, logoutUser } from "../../services/api";
 
 export function Root() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userPhoto, setUserPhoto] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
 
-  // localStorage'dan tema tercihini yükle
+  // Check auth status and load theme preference
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme === "light") {
       setIsDarkMode(false);
     }
 
-    const userStr = localStorage.getItem("user");
-    if (userStr) {
+    // Token-based auth check
+    if (isAuthenticated()) {
       setIsLoggedIn(true);
-      const user = JSON.parse(userStr);
-      setUserPhoto(user.profilePhoto || null);
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          setUserName(user.name || null);
+        } catch {
+          setUserName(null);
+        }
+      }
     } else {
       setIsLoggedIn(false);
-      setUserPhoto(null);
+      setUserName(null);
     }
   }, [location.pathname]);
 
@@ -32,6 +41,13 @@ export function Root() {
     const newTheme = !isDarkMode;
     setIsDarkMode(newTheme);
     localStorage.setItem("theme", newTheme ? "dark" : "light");
+  };
+
+  const handleLogout = () => {
+    logoutUser();
+    setIsLoggedIn(false);
+    setUserName(null);
+    navigate("/");
   };
 
   const navItems = [
@@ -89,50 +105,58 @@ export function Root() {
           {/* Auth butonları - Sağ üst köşe */}
           <div className="absolute top-0 right-0 flex gap-3">
             {isLoggedIn ? (
-            <Link
-              to="/profil"
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all ${
-                location.pathname === "/profil"
-                  ? "bg-green-500 text-white"
-                  : isDarkMode
-                  ? "bg-white/10 text-white hover:bg-white/20"
-                  : "bg-slate-800/10 text-slate-800 hover:bg-slate-800/20"
-              }`}
-           >
-            <div className={`w-6 h-6 rounded-full overflow-hidden flex items-center justify-center ${
-               !userPhoto && (isDarkMode ? "bg-green-500/30" : "bg-green-500/20")
-            }`}>
-              {userPhoto ? (
-                 <img src={userPhoto} alt="Profil" className="w-full h-full object-cover" />
-               ) : (
+            <>
+              <Link
+                to="/profil"
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all ${
+                  location.pathname === "/profil"
+                    ? "bg-green-500 text-white"
+                    : isDarkMode
+                    ? "bg-white/10 text-white hover:bg-white/20"
+                    : "bg-slate-800/10 text-slate-800 hover:bg-slate-800/20"
+                }`}
+             >
+              <div className={`w-6 h-6 rounded-full overflow-hidden flex items-center justify-center ${
+                 isDarkMode ? "bg-green-500/30" : "bg-green-500/20"
+              }`}>
                 <User className="w-4 h-4" />
+              </div>
+              <span>{userName || "Profil"}</span>
+            </Link>
+            <button
+              onClick={handleLogout}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all ${
+                isDarkMode
+                  ? "bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                  : "bg-red-50 text-red-600 hover:bg-red-100"
+              }`}
+            >
+              Çıkış
+            </button>
+            </>
+          ) : (
+            <>
+              <Link
+                to="/giris-yap"
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
+                  isDarkMode
+                    ? "bg-white/10 text-white hover:bg-white/20"
+                    : "bg-slate-800/10 text-slate-800 hover:bg-slate-800/20"
+                }`}
+              >
+                <LogIn className="w-4 h-4" />
+                Giriş Yap
+              </Link>
+              <Link
+                to="/kayit-ol"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-500 text-white hover:bg-green-600 transition-all"
+              >
+                <UserPlus className="w-4 h-4" />
+                Kayıt Ol
+              </Link>
+              </>
               )}
             </div>
-            <span>Profil</span>
-          </Link>
-        ) : (
-          <>
-            <Link
-              to="/giris-yap"
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
-                isDarkMode
-                  ? "bg-white/10 text-white hover:bg-white/20"
-                  : "bg-slate-800/10 text-slate-800 hover:bg-slate-800/20"
-              }`}
-            >
-              <LogIn className="w-4 h-4" />
-              Giriş Yap
-            </Link>
-            <Link
-              to="/kayit-ol"
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-500 text-white hover:bg-green-600 transition-all"
-            >
-              <UserPlus className="w-4 h-4" />
-              Kayıt Ol
-            </Link>
-            </>
-            )}
-          </div>
 
           {/* Logo ve Başlık */}
           <h1 className={`text-4xl font-bold text-center mb-8 transition-colors ${

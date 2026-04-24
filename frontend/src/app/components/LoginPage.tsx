@@ -1,29 +1,32 @@
 import { useState } from "react";
 import { useOutletContext, Link, useNavigate } from "react-router";
-import { LogIn, Mail, Lock } from "lucide-react";
+import { LogIn, Mail, Lock, AlertCircle } from "lucide-react";
 import { Button } from "./ui/button";
+import { loginUser } from "../../services/api";
 
 export function LoginPage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    //  Gerçek authentication mantığı ekle
-    console.log("Login attempt:", { email, password });
+    setError("");
+    setIsLoading(true);
 
-      
-    const userData = {
-      name: email.split("@")[0], // Email'den isim oluştur 
-      email,
-      joinDate: new Date().toISOString(),
-    };
-    localStorage.setItem("user", JSON.stringify(userData));
-
-    // Başarılı giriş sonrası ana sayfaya yönlendir
-    navigate("/");
+    try {
+      await loginUser(email, password);
+      // Başarılı giriş sonrası ana sayfaya yönlendir
+      navigate("/");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Giriş yapılamadı.";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -64,6 +67,14 @@ export function LoginPage() {
           </p>
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+            <p className="text-sm text-red-400">{error}</p>
+          </div>
+        )}
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Email Input */}
@@ -89,11 +100,12 @@ export function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="ornek@email.com"
                 required
+                disabled={isLoading}
                 className={`w-full pl-11 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-green-500 transition-all ${
                   isDarkMode
                     ? "bg-white/10 text-white placeholder-white/40 border-white/20"
                     : "bg-white text-slate-900 placeholder-slate-400 border-slate-300"
-                }`}
+                } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
               />
             </div>
           </div>
@@ -121,11 +133,12 @@ export function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
+                disabled={isLoading}
                 className={`w-full pl-11 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-green-500 transition-all ${
                   isDarkMode
                     ? "bg-white/10 text-white placeholder-white/40 border-white/20"
                     : "bg-white text-slate-900 placeholder-slate-400 border-slate-300"
-                }`}
+                } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
               />
             </div>
           </div>
@@ -145,9 +158,22 @@ export function LoginPage() {
           {/* Submit Button */}
           <Button
             type="submit"
-            className="w-full py-3 rounded-xl bg-green-500 hover:bg-green-600 text-white font-semibold text-lg transition-all shadow-lg"
+            disabled={isLoading}
+            className={`w-full py-3 rounded-xl bg-green-500 hover:bg-green-600 text-white font-semibold text-lg transition-all shadow-lg ${
+              isLoading ? "opacity-70 cursor-not-allowed" : ""
+            }`}
           >
-            Giriş Yap
+            {isLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Giriş yapılıyor...
+              </span>
+            ) : (
+              "Giriş Yap"
+            )}
           </Button>
         </form>
 
