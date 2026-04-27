@@ -3,6 +3,7 @@ import { Calendar, Clock, TrendingUp, Award } from "lucide-react";
 import { Card } from "./ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { useOutletContext } from "react-router";
+import { getUserSessions, isAuthenticated } from "../../services/api";
 
 interface PomodoroSession {
   date: string;
@@ -15,10 +16,33 @@ export function StatsPage() {
   const [sessions, setSessions] = useState<PomodoroSession[]>([]);
 
   useEffect(() => {
-    const saved = localStorage.getItem("pomodoroSessions");
-    if (saved) {
-      setSessions(JSON.parse(saved));
+    async function fetchSessions() {
+      if (isAuthenticated()) {
+        try {
+          const apiSessions = await getUserSessions();
+          // Backend'den gelen veriyi frontend formatına dönüştür
+          const formatted = apiSessions.map((s: any) => ({
+            date: s.ended_at,
+            duration: s.actual_duration_seconds,
+            subject: s.title,
+            type: s.session_type,
+            completed: s.completed
+          }));
+          setSessions(formatted);
+          return;
+        } catch (error) {
+          console.error("Failed to fetch sessions from API, falling back to local storage", error);
+        }
+      }
+      
+      // Fallback: Local storage
+      const saved = localStorage.getItem("pomodoroSessions");
+      if (saved) {
+        setSessions(JSON.parse(saved));
+      }
     }
+
+    fetchSessions();
   }, []);
 
   const today = new Date().toDateString();

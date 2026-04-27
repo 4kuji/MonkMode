@@ -4,7 +4,7 @@
  * Uses fetch (no axios dependency needed).
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 // ─── Token helpers ───────────────────────────────────────────────
 
@@ -189,6 +189,7 @@ export async function registerUser(
 
 interface ChatResponse {
   response: string;
+  is_fallback?: boolean;
 }
 
 export async function sendChatMessage(
@@ -204,9 +205,140 @@ export async function sendChatMessage(
       throw new Error('UNAUTHORIZED');
     }
     const errorData = await response.json().catch(() => ({}));
+    if (response.status === 503 && errorData.fallback_message) {
+      const err = new Error(errorData.error || 'AI servisi kullanılamıyor.');
+      (err as any).fallback_message = errorData.fallback_message;
+      throw err;
+    }
     throw new Error(
       errorData.error || errorData.detail || 'AI yanıtı alınamadı.',
     );
+  }
+
+  return response.json();
+}
+
+export interface StudyPlanSession {
+  title: string;
+  description: string;
+  start_time: string;
+  end_time: string;
+  session_type: string;
+  course_name: string;
+}
+
+export interface StudyPlanResponse {
+  plan: {
+    summary: string;
+    sessions: StudyPlanSession[];
+  }
+}
+
+export async function generateStudyPlan(message: string): Promise<StudyPlanResponse> {
+  const response = await apiFetch('/ai/study-plan/', {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('UNAUTHORIZED');
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || errorData.detail || 'Plan oluşturulamadı.');
+  }
+
+  return response.json();
+}
+
+export async function confirmStudyPlan(sessions: StudyPlanSession[]) {
+  const response = await apiFetch('/calendar/confirm-study-plan/', {
+    method: 'POST',
+    body: JSON.stringify({ sessions }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('UNAUTHORIZED');
+    const errorData = await response.json().catch(() => ({}));
+    
+    // Check if it's the specific OAuth error we threw
+    if (response.status === 403 && errorData.needs_oauth) {
+      const err = new Error('NEEDS_OAUTH');
+      (err as any).auth_url = errorData.auth_url;
+      throw err;
+    }
+    
+    throw new Error(errorData.error || errorData.detail || 'Takvime eklenemedi.');
+  }
+
+  return response.json();
+}
+
+// ─── Session API ─────────────────────────────────────────────────
+
+export interface SessionPayload {
+  session_type: 'pomodoro' | 'stopwatch' | 'short_break' | 'long_break';
+  title: string;
+  planned_duration_minutes: number;
+  actual_duration_seconds: number;
+  started_at: string;
+  ended_at: string;
+  completed: boolean;
+}
+
+interface SaveSessionResponse {
+  message: string;
+  session: SessionPayload & { id: number; created_at: string };
+}
+
+export async function saveSession(
+  payload: SessionPayload,
+): Promise<SaveSessionResponse> {
+  const response = await apiFetch('/save-session/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('UNAUTHORIZED');
+    }
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || errorData.error || 'Oturum kaydedilemedi.',
+    );
+  }
+
+  return response.json();
+}
+
+export interface StudySessionRecord {
+  id: number;
+  session_type: string;
+  title: string;
+  planned_duration_minutes: number;
+  actual_duration_seconds: number;
+  started_at: string;
+  ended_at: string;
+  completed: boolean;
+  created_at: string;
+}
+
+export async function getUserSessions(
+  params?: { session_type?: string; limit?: number },
+): Promise<StudySessionRecord[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.session_type) searchParams.set('session_type', params.session_type);
+  if (params?.limit) searchParams.set('limit', params.limit.toString());
+
+  const query = searchParams.toString();
+  const endpoint = `/sessions/${query ? `?${query}` : ''}`;
+
+  const response = await apiFetch(endpoint, { method: 'GET' });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('UNAUTHORIZED');
+    }
+    throw new Error('Oturumlar alınamadı.');
   }
 
   return response.json();

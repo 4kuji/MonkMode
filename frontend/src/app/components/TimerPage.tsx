@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Play, Pause, RotateCcw, Minimize2, Maximize2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { useOutletContext } from "react-router";
+import { saveSession, isAuthenticated, SessionPayload } from "../../services/api";
 
 const SHORT_BREAK = 5 * 60; // 5 dakika
 const LONG_BREAK = 15 * 60; // 15 dakika
@@ -20,6 +21,7 @@ export function TimerPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [completedPomodoros, setCompletedPomodoros] = useState(0);
   const [subject, setSubject] = useState("");
+  const [startedAt, setStartedAt] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const totalTime =
@@ -43,6 +45,10 @@ export function TimerPage() {
   const strokeDashoffset = circumference - (progress / 100) * circumference;
 
   useEffect(() => {
+    if (isRunning && !startedAt) {
+      setStartedAt(new Date().toISOString());
+    }
+
     if (isRunning) {
       if (mode === "stopwatch") {
         // Kronometre modu - yukarı say
@@ -69,14 +75,49 @@ export function TimerPage() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isRunning, timeLeft, mode]);
+  }, [isRunning, timeLeft, mode, startedAt]);
 
-  const handleComplete = () => {
-    if (mode === "pomodoro") {
+  const saveCurrentSession = async (isCompleted: boolean) => {
+    if (!startedAt) return; // Session never started
+
+    let actualSeconds = 0;
+    if (mode === "stopwatch") {
+      actualSeconds = timeLeft; // stopwatch counts up
+    } else {
+      actualSeconds = totalTime - timeLeft;
+    }
+
+    if (actualSeconds <= 0) return; // No time elapsed
+
+    let apiMode: SessionPayload["session_type"] = "pomodoro";
+    if (mode === "short") apiMode = "short_break";
+    else if (mode === "long") apiMode = "long_break";
+    else if (mode === "stopwatch") apiMode = "stopwatch";
+
+    const payload: SessionPayload = {
+      session_type: apiMode,
+      title: subject || "Diğer",
+      planned_duration_minutes: mode === "stopwatch" ? 0 : Math.floor(totalTime / 60),
+      actual_duration_seconds: actualSeconds,
+      started_at: startedAt,
+      ended_at: new Date().toISOString(),
+      completed: isCompleted,
+    };
+
+    if (isAuthenticated()) {
+      try {
+        await saveSession(payload);
+        alert("Oturum kaydedildi.");
+      } catch (err) {
+        console.error("Oturum kaydedilirken hata oluştu:", err);
+      }
+    }
+
+    // Keep the local logic as fallback/local history
+    if (mode === "pomodoro" && isCompleted) {
       const newCount = completedPomodoros + 1;
       setCompletedPomodoros(newCount);
       
-      // localStorage'a kaydet
       const sessions = JSON.parse(localStorage.getItem("pomodoroSessions") || "[]");
       sessions.push({
         date: new Date().toISOString(),
@@ -84,12 +125,18 @@ export function TimerPage() {
         subject: subject || "Diğer",
       });
       localStorage.setItem("pomodoroSessions", JSON.stringify(sessions));
+    }
 
-      // Bildirim sesi (opsiyonel)
-      if (typeof Audio !== "undefined") {
-        const audio = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTCK0/DQfikHI3fH8NyNPAkTXbPn6qxXFApGnt/xvWwcBSyF0O/MdSgFIHfH8NmNOwgSW7Lm6qpYFApFnd7wvGsdBSuBzvDLdCkFIHjH8NmMOwgPWbDm6KxaFApFnN3xvG0dBSuAzfDLcSgFInbG8NiKOQcQWLDl56xYEwpEm9vwvG4dBSh+zfDLQhQQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
-        audio.play().catch(() => {});
-      }
+    setStartedAt(null);
+  };
+
+  const handleComplete = () => {
+    saveCurrentSession(true);
+
+    // Bildirim sesi (opsiyonel)
+    if (typeof Audio !== "undefined") {
+      const audio = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTCK0/DQfikHI3fH8NyNPAkTXbPn6qxXFApGnt/xvWwcBSyF0O/MdSgFIHfH8NmNOwgSW7Lm6qpYFApFnd7wvGsdBSuBzvDLdCkFIHjH8NmMOwgPWbDm6KxaFApFnN3xvG0dBSuAzfDLcSgFInbG8NiKOQcQWLDl56xYEwpEm9vwvG4dBSh+zfDLQhQQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+      audio.play().catch(() => {});
     }
   };
 
@@ -98,11 +145,13 @@ export function TimerPage() {
   };
 
   const resetTimer = () => {
+    saveCurrentSession(false);
     setIsRunning(false);
     setTimeLeft(totalTime);
   };
 
   const changeMode = (newMode: TimerMode) => {
+    saveCurrentSession(false);
     setMode(newMode);
     setIsRunning(false);
     const newTime =

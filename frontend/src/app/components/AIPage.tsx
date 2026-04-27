@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, AlertCircle } from "lucide-react";
+import { Send, Bot, User, AlertCircle, Calendar, Clock } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { useOutletContext, useNavigate } from "react-router";
-import { sendChatMessage, isAuthenticated } from "../../services/api";
+import { sendChatMessage, isAuthenticated, generateStudyPlan, confirmStudyPlan, StudyPlanSession, StudyPlanResponse } from "../../services/api";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
+  planData?: StudyPlanResponse["plan"];
 }
 
 export function AIPage() {
@@ -62,22 +63,85 @@ export function AIPage() {
           content: data.response,
         },
       ]);
-    } catch (err: unknown) {
+    } catch (err: any) {
       const message = err instanceof Error ? err.message : "AI yanıtı alınamadı.";
       if (message === "UNAUTHORIZED") {
         navigate("/giris-yap");
         return;
       }
+      
       setError(message);
+      
+      if (err.fallback_message) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: err.fallback_message,
+          },
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: "Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.",
+          },
+        ]);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGeneratePlan = async () => {
+    if (!input.trim()) return;
+
+    const userMessage: Message = {
+      role: "user",
+      content: `[Çalışma Planı İsteği]: ${input}`,
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const data = await generateStudyPlan(input);
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: "Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.",
+          content: data.plan.summary,
+          planData: data.plan,
         },
       ]);
+    } catch (err: any) {
+      if (err.message === "UNAUTHORIZED") {
+        navigate("/giris-yap");
+        return;
+      }
+      setError(err.message || "Plan oluşturulamadı.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleConfirmPlan = async (sessions: StudyPlanSession[]) => {
+    try {
+      await confirmStudyPlan(sessions);
+      alert("Çalışma planı Google Calendar'a eklendi.");
+    } catch (err: any) {
+      if (err.message === "NEEDS_OAUTH") {
+        if (err.auth_url) {
+           window.location.href = err.auth_url;
+        } else {
+           alert("Google Calendar hesabınızı bağlamanız gerekiyor.");
+        }
+      } else {
+        alert(err.message || "Takvime eklenirken bir hata oluştu.");
+      }
     }
   };
 
@@ -131,6 +195,31 @@ export function AIPage() {
                 }`}
               >
                 <div className="whitespace-pre-wrap">{message.content}</div>
+                {message.planData && (
+                  <div className={`mt-4 p-4 rounded-xl flex flex-col gap-3 ${isDarkMode ? "bg-white/5" : "bg-white border"}`}>
+                    <h4 className={`font-bold border-b pb-2 ${isDarkMode ? "border-white/10" : "border-slate-200"}`}>
+                      Önerilen Çalışma Planı
+                    </h4>
+                    {message.planData.sessions.map((s, i) => (
+                      <div key={i} className={`p-3 rounded-lg text-sm ${isDarkMode ? "bg-white/10" : "bg-slate-50 border"}`}>
+                        <div className="font-semibold text-purple-500 dark:text-purple-400">{s.title} ({s.course_name})</div>
+                        <div className={`mt-1 ${isDarkMode ? "text-slate-300" : "text-slate-600"}`}>{s.description}</div>
+                        <div className={`text-xs mt-2 flex items-center gap-1 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                           <Clock className="w-3 h-3" />
+                           {new Date(s.start_time).toLocaleString("tr-TR")} - {new Date(s.end_time).toLocaleTimeString("tr-TR")}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex gap-2 mt-2">
+                       <Button 
+                         onClick={() => handleConfirmPlan(message.planData!.sessions)}
+                         className="bg-green-600 hover:bg-green-700 text-white text-xs py-1 h-8 px-4"
+                       >
+                         Takvime Ekle
+                       </Button>
+                    </div>
+                  </div>
+                )}
               </div>
               {message.role === "user" && (
                 <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
@@ -187,6 +276,14 @@ export function AIPage() {
                   : "bg-white text-black placeholder-slate-400 border-slate-300"
               }`}
             />
+            <Button
+              onClick={handleGeneratePlan}
+              disabled={!input.trim() || isLoading}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4"
+              title="Yapay Zekadan Çalışma Planı Oluşturmasını İste"
+            >
+              <Calendar className="w-5 h-5" />
+            </Button>
             <Button
               onClick={handleSend}
               disabled={!input.trim() || isLoading}
