@@ -5,6 +5,7 @@ import { StatsPage } from "./components/StatsPage";
 import { AIPage } from "./components/AIPage";
 import { LoginPage } from "./components/LoginPage";
 import { SignupPage } from "./components/SignupPage";
+import { TimerWidgetPage } from "./components/TimerWidgetPage";
 
 export const router = createBrowserRouter([
   {
@@ -18,4 +19,6 @@ export const router = createBrowserRouter([
       { path: "kayit-ol", Component: SignupPage },
     ],
   },
+  // Standalone widget page (no Root layout) for pop-out window
+  { path: "/timer-widget", Component: TimerWidgetPage },
 ]);
