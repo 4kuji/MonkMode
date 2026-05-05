@@ -12,6 +12,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import status
+from django.contrib.auth.models import User
+from rest_framework_simplejwt.tokens import RefreshToken
 from django.urls import reverse
 
 from sessions.models import StudySession
@@ -93,9 +95,9 @@ class ChatView(APIView):
         fallback_response = self.get_dynamic_fallback(pomodoros_today, minutes_today, message)
 
         try:
-            ollama_url = f"{settings.OLLAMA_BASE_URL}/api/generate"
+            ollama_url = "http://localhost:11434/api/generate"
             payload = {
-                'model': settings.OLLAMA_MODEL,
+                'model': "llama3.1:8b",
                 'prompt': f"{dynamic_prompt}\n\nKullanıcı: {message}\n\nAsistan:",
                 'stream': False,
             }
@@ -176,9 +178,9 @@ LÜTFEN DİKKAT: YANITINI **SADECE** AŞAĞIDAKİ JSON FORMATINDA VER. HİÇBİR
 """
 
         try:
-            ollama_url = f"{settings.OLLAMA_BASE_URL}/api/generate"
+            ollama_url = "http://localhost:11434/api/generate"
             payload = {
-                'model': settings.OLLAMA_MODEL,
+                'model': "llama3.1:8b",
                 'prompt': prompt,
                 'stream': False,
                 'format': 'json', # Instructs Ollama to return JSON if supported
@@ -520,3 +522,56 @@ def generate_advice(request):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+class RegisterView(APIView):
+    """
+    POST /api/register/
+    Creates a new user and returns JWT tokens.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        name = request.data.get('name')
+        email = request.data.get('email')
+        password = request.data.get('password')
+
+        if not name or not email or not password:
+            return Response(
+                {'error': 'İsim, e-posta ve şifre gereklidir.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if User.objects.filter(username=email).exists():
+            return Response(
+                {'error': 'Bu e-posta adresi zaten kayıtlı.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Create user
+            user = User.objects.create_user(
+                username=email,
+                email=email,
+                password=password,
+                first_name=name
+            )
+            
+            # Generate tokens
+            refresh = RefreshToken.for_user(user)
+            
+            return Response({
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+                'user': {
+                    'id': user.id,
+                    'name': user.first_name,
+                    'email': user.email
+                }
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Kayıt sırasında bir hata oluştu: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

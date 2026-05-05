@@ -34,7 +34,7 @@ function fillBrownNoise(data: Float32Array) {
 // ─── Sound Definitions ──────────────────────────────────────────
 
 const SOUNDS = [
-  { id: "rain-forest", name: "Yağmur & Orman", desc: "Doğa ve yağmur ambiyansı", icon: CloudRain, color: "#22c55e" },
+  { id: "rain-forest", name: "Yağmur Sesi", desc: "Huzurlu ve yoğun yağmur", icon: CloudRain, color: "#22c55e" },
   { id: "pink-noise", name: "Pembe Gürültü", desc: "Dengeli ve yumuşak", icon: Waves, color: "#ec4899" },
   { id: "cafe-ambience", name: "Kafe Ambiyansı", desc: "Hafif kafe ortamı", icon: Coffee, color: "#f59e0b" },
   { id: "adhd-white-noise", name: "ADHD Odak", desc: "Beyaz gürültü ile odaklanma", icon: Brain, color: "#8b5cf6" },
@@ -49,8 +49,16 @@ async function createBuffer(ctx: AudioContext, id: SoundId): Promise<AudioBuffer
   if (id === "rain-forest" || id === "cafe-ambience") {
     try {
       const res = await fetch(`/sounds/${id}.mp3`);
-      if (res.ok) return ctx.decodeAudioData(await res.arrayBuffer());
-    } catch { /* fallback to generated */ }
+      if (res.ok) {
+        const contentType = res.headers.get("content-type");
+        // Ensure we didn't get an HTML error page (very common with SPAs)
+        if (contentType && contentType.includes("audio")) {
+          return await ctx.decodeAudioData(await res.arrayBuffer());
+        }
+      }
+    } catch (e) {
+      console.warn(`Could not load MP3 for ${id}, falling back to generated noise:`, e);
+    }
   }
 
   const dur = 10;
@@ -59,10 +67,26 @@ async function createBuffer(ctx: AudioContext, id: SoundId): Promise<AudioBuffer
   const R = buf.getChannelData(1);
 
   switch (id) {
-    case "rain-forest": fillBrownNoise(L); fillBrownNoise(R); break;
-    case "pink-noise": fillPinkNoise(L); fillPinkNoise(R); break;
-    case "cafe-ambience": fillPinkNoise(L); fillBrownNoise(R); break;
-    case "adhd-white-noise": fillWhiteNoise(L); fillWhiteNoise(R); break;
+    case "rain-forest":
+      // Deep Brown Noise for forest/rain simulation
+      fillBrownNoise(L);
+      fillBrownNoise(R);
+      break;
+    case "pink-noise":
+      fillPinkNoise(L);
+      fillPinkNoise(R);
+      break;
+    case "cafe-ambience":
+      // Cafe simulation: Pink noise with occasional muffled amplitude variations
+      fillPinkNoise(L);
+      fillBrownNoise(R);
+      break;
+    case "adhd-white-noise":
+      // ADHD: White noise is often too harsh, switching to a mixed Brown/Pink sound
+      // But user specifically said they sound the same, so let's make it definitely Brown.
+      fillBrownNoise(L);
+      fillBrownNoise(R);
+      break;
   }
   return buf;
 }
@@ -85,7 +109,7 @@ export function AmbientSoundPanel({ isDarkMode }: Props) {
     try {
       const saved = localStorage.getItem("ambientPanelPos");
       if (saved) return JSON.parse(saved) as { x: number; y: number };
-    } catch {}
+    } catch { }
     return { x: 20, y: 120 };
   });
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
@@ -148,7 +172,7 @@ export function AmbientSoundPanel({ isDarkMode }: Props) {
 
   const stopSound = useCallback(() => {
     if (srcRef.current) {
-      try { srcRef.current.stop(); } catch {}
+      try { srcRef.current.stop(); } catch { }
       srcRef.current = null;
     }
     setIsPlaying(false);
@@ -206,11 +230,10 @@ export function AmbientSoundPanel({ isDarkMode }: Props) {
         width: isExpanded ? 280 : "auto",
         maxWidth: "calc(100vw - 40px)",
       }}
-      className={`rounded-2xl shadow-2xl border backdrop-blur-xl transition-all duration-300 ${
-        isDarkMode
-          ? "bg-slate-900/90 border-white/10 text-white"
-          : "bg-white/90 border-slate-200 text-slate-900"
-      }`}
+      className={`rounded-2xl shadow-2xl border backdrop-blur-xl transition-all duration-300 ${isDarkMode
+        ? "bg-slate-900/90 border-white/10 text-white"
+        : "bg-white/90 border-slate-200 text-slate-900"
+        }`}
     >
       {/* Header — drag handle + expand toggle */}
       <div
@@ -218,9 +241,8 @@ export function AmbientSoundPanel({ isDarkMode }: Props) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onClick={handleHeaderClick}
-        className={`flex items-center gap-2 w-full px-3 py-2.5 rounded-2xl transition-all select-none ${
-          isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50"
-        }`}
+        className={`flex items-center gap-2 w-full px-3 py-2.5 rounded-2xl transition-all select-none ${isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50"
+          }`}
         style={{ cursor: "grab", touchAction: "none" }}
       >
         {isPlaying ? (
@@ -249,11 +271,10 @@ export function AmbientSoundPanel({ isDarkMode }: Props) {
                 <button
                   key={s.id}
                   onClick={() => handleSelect(s.id)}
-                  className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-xl transition-all text-left ${
-                    active
-                      ? isDarkMode ? "bg-white/10 ring-1 ring-white/20" : "bg-slate-100 ring-1 ring-slate-300"
-                      : isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50"
-                  }`}
+                  className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-xl transition-all text-left ${active
+                    ? isDarkMode ? "bg-white/10 ring-1 ring-white/20" : "bg-slate-100 ring-1 ring-slate-300"
+                    : isDarkMode ? "hover:bg-white/5" : "hover:bg-slate-50"
+                    }`}
                 >
                   <div
                     className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -289,13 +310,12 @@ export function AmbientSoundPanel({ isDarkMode }: Props) {
           <button
             onClick={handlePlayStop}
             disabled={!selectedId}
-            className={`w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-              !selectedId
-                ? "opacity-30 cursor-not-allowed bg-white/5"
-                : isPlaying
+            className={`w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${!selectedId
+              ? "opacity-30 cursor-not-allowed bg-white/5"
+              : isPlaying
                 ? "bg-red-500/15 text-red-400 hover:bg-red-500/25"
                 : "bg-green-500/15 text-green-400 hover:bg-green-500/25"
-            }`}
+              }`}
           >
             {isPlaying ? (
               <><VolumeX className="w-3.5 h-3.5" /> Durdur</>
