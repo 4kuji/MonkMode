@@ -9,6 +9,8 @@ interface PomodoroSession {
   date: string;
   duration: number;
   subject?: string;
+  type: string;
+  completed: boolean;
 }
 
 export function StatsPage() {
@@ -20,9 +22,8 @@ export function StatsPage() {
       if (isAuthenticated()) {
         try {
           const apiSessions = await getUserSessions();
-          // Backend'den gelen veriyi frontend formatına dönüştür
           const formatted = apiSessions.map((s: any) => ({
-            date: s.ended_at,
+            date: s.ended_at || s.started_at,
             duration: s.actual_duration_seconds,
             subject: s.title,
             type: s.session_type,
@@ -34,11 +35,17 @@ export function StatsPage() {
           console.error("Failed to fetch sessions from API, falling back to local storage", error);
         }
       }
-      
-      // Fallback: Local storage
+
       const saved = localStorage.getItem("pomodoroSessions");
       if (saved) {
-        setSessions(JSON.parse(saved));
+        const local = JSON.parse(saved).map((s: any) => ({
+          date: s.date,
+          duration: s.duration,
+          subject: s.subject,
+          type: 'pomodoro',
+          completed: true
+        }));
+        setSessions(local);
       }
     }
 
@@ -131,101 +138,82 @@ export function StatsPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h2 className={`text-3xl font-bold mb-8 ${
-        isDarkMode ? "text-white" : "text-black"
-      }`}>İstatistikler</h2>
+      <h2 className={`text-3xl font-bold mb-8 ${isDarkMode ? "text-white" : "text-black"
+        }`}>İstatistikler</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <Card className={`p-6 ${
-          isDarkMode 
-            ? "bg-white/10 border-white/20" 
+        <Card className={`p-6 ${isDarkMode
+            ? "bg-white/10 border-white/20"
             : "bg-white border-slate-200"
-        }`}>
+          }`}>
           <div className="flex items-center gap-3 mb-2">
             <Calendar className="w-8 h-8 text-blue-400" />
-            <div className={`text-sm ${
-              isDarkMode ? "text-white/60" : "text-black/60"
-            }`}>Bugün</div>
+            <div className={`text-sm ${isDarkMode ? "text-white/60" : "text-black/60"
+              }`}>Bugün</div>
           </div>
-          <div className={`text-3xl font-bold ${
-            isDarkMode ? "text-white" : "text-black"
-          }`}>
+          <div className={`text-3xl font-bold ${isDarkMode ? "text-white" : "text-black"
+            }`}>
             {todaySessions.length}
           </div>
-          <div className={`text-xs ${
-            isDarkMode ? "text-white/40" : "text-black/40"
-          }`}>pomodoro</div>
+          <div className={`text-xs ${isDarkMode ? "text-white/40" : "text-black/40"
+            }`}>pomodoro</div>
         </Card>
 
-        <Card className={`p-6 ${
-          isDarkMode 
-            ? "bg-white/10 border-white/20" 
+        <Card className={`p-6 ${isDarkMode
+            ? "bg-white/10 border-white/20"
             : "bg-white border-slate-200"
-        }`}>
+          }`}>
           <div className="flex items-center gap-3 mb-2">
             <TrendingUp className="w-8 h-8 text-green-400" />
-            <div className={`text-sm ${
-              isDarkMode ? "text-white/60" : "text-black/60"
-            }`}>Bu Hafta</div>
+            <div className={`text-sm ${isDarkMode ? "text-white/60" : "text-black/60"
+              }`}>Bu Hafta</div>
           </div>
-          <div className={`text-3xl font-bold ${
-            isDarkMode ? "text-white" : "text-black"
-          }`}>
+          <div className={`text-3xl font-bold ${isDarkMode ? "text-white" : "text-black"
+            }`}>
             {thisWeek.length}
           </div>
-          <div className={`text-xs ${
-            isDarkMode ? "text-white/40" : "text-black/40"
-          }`}>pomodoro</div>
+          <div className={`text-xs ${isDarkMode ? "text-white/40" : "text-black/40"
+            }`}>pomodoro</div>
         </Card>
 
-        <Card className={`p-6 ${
-          isDarkMode 
-            ? "bg-white/10 border-white/20" 
+        <Card className={`p-6 ${isDarkMode
+            ? "bg-white/10 border-white/20"
             : "bg-white border-slate-200"
-        }`}>
+          }`}>
           <div className="flex items-center gap-3 mb-2">
             <Clock className="w-8 h-8 text-purple-400" />
-            <div className={`text-sm ${
-              isDarkMode ? "text-white/60" : "text-black/60"
-            }`}>Toplam Süre</div>
+            <div className={`text-sm ${isDarkMode ? "text-white/60" : "text-black/60"
+              }`}>Toplam Süre</div>
           </div>
-          <div className={`text-3xl font-bold ${
-            isDarkMode ? "text-white" : "text-black"
-          }`}>{totalHours}s</div>
-          <div className={`text-xs ${
-            isDarkMode ? "text-white/40" : "text-black/40"
-          }`}>{totalMinutes % 60} dakika</div>
+          <div className={`text-3xl font-bold ${isDarkMode ? "text-white" : "text-black"
+            }`}>{totalHours}s</div>
+          <div className={`text-xs ${isDarkMode ? "text-white/40" : "text-black/40"
+            }`}>{totalMinutes % 60} dakika</div>
         </Card>
 
-        <Card className={`p-6 ${
-          isDarkMode 
-            ? "bg-white/10 border-white/20" 
+        <Card className={`p-6 ${isDarkMode
+            ? "bg-white/10 border-white/20"
             : "bg-white border-slate-200"
-        }`}>
+          }`}>
           <div className="flex items-center gap-3 mb-2">
             <Award className="w-8 h-8 text-yellow-400" />
-            <div className={`text-sm ${
-              isDarkMode ? "text-white/60" : "text-black/60"
-            }`}>Seri</div>
+            <div className={`text-sm ${isDarkMode ? "text-white/60" : "text-black/60"
+              }`}>Seri</div>
           </div>
-          <div className={`text-3xl font-bold ${
-            isDarkMode ? "text-white" : "text-black"
-          }`}>{streak}</div>
-          <div className={`text-xs ${
-            isDarkMode ? "text-white/40" : "text-black/40"
-          }`}>gün</div>
+          <div className={`text-3xl font-bold ${isDarkMode ? "text-white" : "text-black"
+            }`}>{streak}</div>
+          <div className={`text-xs ${isDarkMode ? "text-white/40" : "text-black/40"
+            }`}>gün</div>
         </Card>
       </div>
 
       {/* Son 7 Gün Grafiği */}
-      <Card className={`p-6 ${
-        isDarkMode 
-          ? "bg-white/10 border-white/20" 
+      <Card className={`p-6 ${isDarkMode
+          ? "bg-white/10 border-white/20"
           : "bg-white border-slate-200"
-      }`}>
-        <h3 className={`text-xl font-bold mb-6 ${
-          isDarkMode ? "text-white" : "text-black"
-        }`}>Son 7 Gün</h3>
+        }`}>
+        <h3 className={`text-xl font-bold mb-6 ${isDarkMode ? "text-white" : "text-black"
+          }`}>Son 7 Gün</h3>
         <div className="flex items-end justify-between gap-2 h-48">
           {last7Days.map((day, index) => {
             const maxCount = Math.max(...last7Days.map((d) => d.count), 1);
@@ -233,9 +221,8 @@ export function StatsPage() {
 
             return (
               <div key={index} className="flex-1 flex flex-col items-center">
-                <div className={`w-full rounded-t-lg relative h-full flex items-end ${
-                  isDarkMode ? "bg-white/5" : "bg-slate-100"
-                }`}>
+                <div className={`w-full rounded-t-lg relative h-full flex items-end ${isDarkMode ? "bg-white/5" : "bg-slate-100"
+                  }`}>
                   <div
                     className="w-full bg-gradient-to-t from-purple-500 to-pink-500 rounded-t-lg transition-all duration-500"
                     style={{ height: `${height}%` }}
@@ -247,9 +234,8 @@ export function StatsPage() {
                     )}
                   </div>
                 </div>
-                <div className={`text-xs mt-2 ${
-                  isDarkMode ? "text-white/60" : "text-black/60"
-                }`}>{day.day}</div>
+                <div className={`text-xs mt-2 ${isDarkMode ? "text-white/60" : "text-black/60"
+                  }`}>{day.day}</div>
               </div>
             );
           })}
@@ -258,14 +244,12 @@ export function StatsPage() {
 
       {/* Ders Dağılımı */}
       {pieData.length > 0 && (
-        <Card className={`p-6 mt-8 ${
-          isDarkMode 
-            ? "bg-white/10 border-white/20" 
+        <Card className={`p-6 mt-8 ${isDarkMode
+            ? "bg-white/10 border-white/20"
             : "bg-white border-slate-200"
-        }`}>
-          <h3 className={`text-xl font-bold mb-6 ${
-            isDarkMode ? "text-white" : "text-black"
-          }`}>Ders Bazlı Çalışma Dağılımı</h3>
+          }`}>
+          <h3 className={`text-xl font-bold mb-6 ${isDarkMode ? "text-white" : "text-black"
+            }`}>Ders Bazlı Çalışma Dağılımı</h3>
           <div className="flex flex-col md:flex-row items-center gap-8">
             <div className="w-full md:w-1/2 h-80">
               <ResponsiveContainer width="100%" height="100%">
@@ -298,17 +282,15 @@ export function StatsPage() {
             </div>
             <div className="w-full md:w-1/2 space-y-3">
               {pieData.sort((a, b) => b.value - a.value).map((item, index) => (
-                <div key={item.name} className={`flex items-center justify-between p-3 rounded-lg ${
-                  isDarkMode ? "bg-white/5" : "bg-slate-50"
-                }`}>
+                <div key={item.name} className={`flex items-center justify-between p-3 rounded-lg ${isDarkMode ? "bg-white/5" : "bg-slate-50"
+                  }`}>
                   <div className="flex items-center gap-3">
                     <div
                       className="w-4 h-4 rounded-full"
                       style={{ backgroundColor: COLORS[index % COLORS.length] }}
                     />
-                    <span className={`font-medium ${
-                      isDarkMode ? "text-white" : "text-black"
-                    }`}>{item.name}</span>
+                    <span className={`font-medium ${isDarkMode ? "text-white" : "text-black"
+                      }`}>{item.name}</span>
                   </div>
                   <div className={isDarkMode ? "text-white/80" : "text-black/80"}>
                     {item.value} dk ({Math.round((item.value / totalMinutes) * 100)}%)
@@ -322,14 +304,12 @@ export function StatsPage() {
 
       {/* Tüm Oturumlar */}
       {sessions.length > 0 && (
-        <Card className={`p-6 mt-8 ${
-          isDarkMode 
-            ? "bg-white/10 border-white/20" 
+        <Card className={`p-6 mt-8 ${isDarkMode
+            ? "bg-white/10 border-white/20"
             : "bg-white border-slate-200"
-        }`}>
-          <h3 className={`text-xl font-bold mb-4 ${
-            isDarkMode ? "text-white" : "text-black"
-          }`}>Son Oturumlar</h3>
+          }`}>
+          <h3 className={`text-xl font-bold mb-4 ${isDarkMode ? "text-white" : "text-black"
+            }`}>Son Oturumlar</h3>
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {sessions
               .slice()
@@ -338,9 +318,8 @@ export function StatsPage() {
               .map((session, index) => (
                 <div
                   key={index}
-                  className={`flex justify-between items-center p-3 rounded-lg ${
-                    isDarkMode ? "bg-white/5" : "bg-slate-50"
-                  }`}
+                  className={`flex justify-between items-center p-3 rounded-lg ${isDarkMode ? "bg-white/5" : "bg-slate-50"
+                    }`}
                 >
                   <div className={isDarkMode ? "text-white" : "text-black"}>
                     {new Date(session.date).toLocaleDateString("tr-TR", {
@@ -361,19 +340,16 @@ export function StatsPage() {
       )}
 
       {sessions.length === 0 && (
-        <Card className={`p-12 text-center mt-8 ${
-          isDarkMode 
-            ? "bg-white/10 border-white/20" 
+        <Card className={`p-12 text-center mt-8 ${isDarkMode
+            ? "bg-white/10 border-white/20"
             : "bg-white border-slate-200"
-        }`}>
-          <div className={`text-lg ${
-            isDarkMode ? "text-white/60" : "text-black/60"
           }`}>
+          <div className={`text-lg ${isDarkMode ? "text-white/60" : "text-black/60"
+            }`}>
             Henüz hiç pomodoro tamamlamadınız.
           </div>
-          <div className={`text-sm mt-2 ${
-            isDarkMode ? "text-white/40" : "text-black/40"
-          }`}>
+          <div className={`text-sm mt-2 ${isDarkMode ? "text-white/40" : "text-black/40"
+            }`}>
             İlk pomodoro'nuzu başlatmak için Timer sayfasına gidin!
           </div>
         </Card>

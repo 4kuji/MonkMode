@@ -4,7 +4,7 @@
  * Uses fetch (no axios dependency needed).
  */
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+export const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 // ─── Token helpers ───────────────────────────────────────────────
 
@@ -258,14 +258,14 @@ export async function confirmStudyPlan(sessions: StudyPlanSession[]) {
   if (!response.ok) {
     if (response.status === 401) throw new Error('UNAUTHORIZED');
     const errorData = await response.json().catch(() => ({}));
-    
+
     // Check if it's the specific OAuth error we threw
     if (response.status === 403 && errorData.needs_oauth) {
       const err = new Error('NEEDS_OAUTH');
       (err as any).auth_url = errorData.auth_url;
       throw err;
     }
-    
+
     throw new Error(errorData.error || errorData.detail || 'Takvime eklenemedi.');
   }
 
@@ -348,4 +348,48 @@ export async function getUserSessions(
 
 export function logoutUser(): void {
   clearTokens();
+}
+
+/**
+ * Synchronizes local sessions with the backend.
+ * Checks for sessions in localStorage that haven't been synced yet.
+ */
+export async function syncLocalSessions(): Promise<void> {
+  const saved = localStorage.getItem('pomodoroSessions');
+  if (!saved || !isAuthenticated()) return;
+
+  try {
+    const sessions = JSON.parse(saved);
+    // Explicitly type as any[] if needed, or define a local interface
+    const unsynced = sessions.filter((s: any) => !s.synced);
+
+    if (unsynced.length === 0) return;
+
+    console.log(`Syncing ${unsynced.length} sessions to backend...`);
+
+    for (const s of unsynced) {
+      const payload: SessionPayload = {
+        session_type: 'pomodoro',
+        title: s.subject || 'Diğer',
+        planned_duration_minutes: 25,
+        actual_duration_seconds: s.duration || 0,
+        started_at: s.date,
+        ended_at: s.date, // Approximate for history
+        completed: true,
+      };
+
+      try {
+        await saveSession(payload);
+        s.synced = true;
+      } catch (err) {
+        console.error('Failed to sync individual session', err);
+      }
+    }
+
+    // Save updated list back to localStorage
+    localStorage.setItem('pomodoroSessions', JSON.stringify(sessions));
+    console.log('Sync completed.');
+  } catch (err) {
+    console.error('Local session sync failed', err);
+  }
 }

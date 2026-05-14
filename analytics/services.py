@@ -8,7 +8,8 @@ def get_user_study_profile(user):
     Pandas ile profil analizi yapar. 
     Eğer yeterli veri yoksa default profil döndürür.
     """
-    sessions = StudySession.objects.filter(user=user, completed=True)
+    # Fetch all study sessions with duration > 0
+    sessions = StudySession.objects.filter(user=user, actual_duration_seconds__gt=0)
     
     if not sessions.exists():
         # Default profile if no data
@@ -22,13 +23,13 @@ def get_user_study_profile(user):
 
     # Extract data into list of dicts for Pandas
     data = list(sessions.values(
-        'session_type', 'title', 'actual_duration_seconds', 'started_at'
+        'session_type', 'title', 'actual_duration_seconds', 'started_at', 'completed'
     ))
     
     df = pd.DataFrame(data)
     
-    # 1. Completed Pomodoros
-    pomodoro_count = df[df['session_type'] == 'pomodoro'].shape[0]
+    # 1. Completed Pomodoros (Only truly completed ones)
+    pomodoro_count = df[(df['session_type'] == 'pomodoro') & (df['completed'] == True)].shape[0] if 'completed' in df.columns else 0
     
     # 2. Daily Average Minutes
     # Add a date column
@@ -71,10 +72,17 @@ def get_user_study_profile(user):
     if total_study > 0:
         break_ratio = total_break / total_study
         
+    # 6. Total Days and Hours
+    total_days = daily_durations.shape[0] if not daily_durations.empty else 0
+    total_seconds = study_df['actual_duration_seconds'].sum() if not study_df.empty else 0
+    total_hours = round(total_seconds / 3600, 1)
+
     return {
         "daily_average_minutes": daily_average_minutes or 90,
         "best_focus_hours": best_focus_hours,
         "course_distribution": course_distribution,
         "completed_pomodoros": pomodoro_count,
-        "break_ratio": round(break_ratio, 2)
+        "break_ratio": round(break_ratio, 2),
+        "total_days": total_days,
+        "total_hours": total_hours
     }
