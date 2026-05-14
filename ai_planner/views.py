@@ -4,6 +4,7 @@ AI Planner views - Ollama-based chat endpoint with analytics-aware fallback.
 import json
 import requests
 import re
+import time
 from datetime import datetime
 from django.conf import settings
 from django.utils import timezone
@@ -22,6 +23,7 @@ from analytics.services import get_user_study_profile
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from google_auth_oauthlib.flow import Flow
 import os
 
@@ -295,7 +297,7 @@ class ConfirmStudyPlanView(APIView):
 
         try:
             for s in sessions:
-                event = {
+                event_body = {
                     'summary': f"{s['title']} ({s.get('course_name', '')})",
                     'description': s.get('description', ''),
                     'start': {
@@ -307,11 +309,33 @@ class ConfirmStudyPlanView(APIView):
                         'timeZone': 'Europe/Istanbul',
                     },
                 }
-                event = service.events().insert(calendarId='primary', body=event).execute()
-                created_events.append({
-                    'title': s['title'],
-                    'html_link': event.get('htmlLink'),
-                })
+                
+                # Retry mechanism for Rate Limits
+                retry_count = 0
+                max_retries = 3
+                event = None
+                
+                while retry_count <= max_retries:
+                    try:
+                        event = service.events().insert(calendarId='primary', body=event_body).execute()
+                        break
+                    except HttpError as error:
+                        if error.resp.status == 403 and "rateLimitExceeded" in str(error):
+                            wait_time = (2 ** retry_count) + 1
+                            time.sleep(wait_time)
+                            retry_count += 1
+                        else:
+                            raise error
+
+                if event:
+                    created_events.append({
+                        'title': s['title'],
+                        'html_link': event.get('htmlLink'),
+                    })
+                
+                # Small gap between successful requests
+                time.sleep(0.5)
+
             return Response({'success': True, 'created_events': created_events})
         except Exception as e:
             return Response({'error': f"Takvime eklerken hata oluştu: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
