@@ -1,0 +1,395 @@
+/**
+ * API Service Layer
+ * Centralized API calls with JWT authentication.
+ * Uses fetch (no axios dependency needed).
+ */
+
+export const API_URL = import.meta.env.VITE_API_URL || '/api';
+
+// ─── Token helpers ───────────────────────────────────────────────
+
+export function getAccessToken(): string | null {
+  return localStorage.getItem('access_token');
+}
+
+export function getRefreshToken(): string | null {
+  return localStorage.getItem('refresh_token');
+}
+
+export function setTokens(access: string, refresh: string): void {
+  localStorage.setItem('access_token', access);
+  localStorage.setItem('refresh_token', refresh);
+}
+
+export function clearTokens(): void {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('user');
+}
+
+export function isAuthenticated(): boolean {
+  return !!getAccessToken();
+}
+
+// ─── Base fetch wrapper ──────────────────────────────────────────
+
+async function apiFetch(
+  endpoint: string,
+  options: RequestInit = {},
+  requireAuth = true,
+): Promise<Response> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+
+  if (requireAuth) {
+    const token = getAccessToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  // If 401 and we have a refresh token, try to refresh
+  if (response.status === 401 && requireAuth) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      // Retry the original request with new token
+      headers['Authorization'] = `Bearer ${getAccessToken()}`;
+      return fetch(`${API_URL}${endpoint}`, {
+        ...options,
+        headers,
+      });
+    } else {
+      // Refresh failed — clear everything
+      clearTokens();
+    }
+  }
+
+  return response;
+}
+
+async function tryRefreshToken(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+
+  try {
+    const response = await fetch(`${API_URL}/token/refresh/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh: refreshToken }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      setTokens(data.access, data.refresh || refreshToken);
+      return true;
+    }
+  } catch {
+    // Refresh failed silently
+  }
+  return false;
+}
+
+// ─── Auth API ────────────────────────────────────────────────────
+
+interface LoginResponse {
+  access: string;
+  refresh: string;
+  user: {
+    id: number;
+    name: string;
+    email: string;
+  };
+}
+
+interface RegisterResponse {
+  access: string;
+  refresh: string;
+  user: {
+    id: number;
+    name: string;
+    email: string;
+  };
+}
+
+export async function loginUser(
+  email: string,
+  password: string,
+): Promise<LoginResponse> {
+  const response = await apiFetch(
+    '/token/',
+    {
+      method: 'POST',
+      body: JSON.stringify({ username: email, password }),
+    },
+    false, // No auth needed for login
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      throw new Error('E-posta veya şifre hatalı.');
+    }
+    throw new Error(
+      errorData.detail || errorData.error || 'Giriş yapılamadı.',
+    );
+  }
+
+  const data: LoginResponse = await response.json();
+
+  // Store tokens and user info
+  setTokens(data.access, data.refresh);
+  localStorage.setItem('user', JSON.stringify(data.user));
+
+  return data;
+}
+
+export async function registerUser(
+  name: string,
+  email: string,
+  password: string,
+): Promise<RegisterResponse> {
+  const response = await apiFetch(
+    '/register/',
+    {
+      method: 'POST',
+      body: JSON.stringify({ name, email, password }),
+    },
+    false, // No auth needed for registration
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    // Handle field-level errors from DRF serializer
+    const firstError =
+      errorData.email?.[0] ||
+      errorData.password?.[0] ||
+      errorData.name?.[0] ||
+      errorData.detail ||
+      'Kayıt işlemi başarısız.';
+    throw new Error(firstError);
+  }
+
+  const data: RegisterResponse = await response.json();
+
+  // Store tokens and user info
+  setTokens(data.access, data.refresh);
+  localStorage.setItem('user', JSON.stringify(data.user));
+
+  return data;
+}
+
+// ─── AI Chat API ─────────────────────────────────────────────────
+
+interface ChatResponse {
+  response: string;
+  is_fallback?: boolean;
+}
+
+export async function sendChatMessage(
+  message: string,
+): Promise<ChatResponse> {
+  const response = await apiFetch('/chat/', {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('UNAUTHORIZED');
+    }
+    const errorData = await response.json().catch(() => ({}));
+    if (response.status === 503 && errorData.fallback_message) {
+      const err = new Error(errorData.error || 'AI servisi kullanılamıyor.');
+      (err as any).fallback_message = errorData.fallback_message;
+      throw err;
+    }
+    throw new Error(
+      errorData.error || errorData.detail || 'AI yanıtı alınamadı.',
+    );
+  }
+
+  return response.json();
+}
+
+export interface StudyPlanSession {
+  title: string;
+  description: string;
+  start_time: string;
+  end_time: string;
+  session_type: string;
+  course_name: string;
+}
+
+export interface StudyPlanResponse {
+  plan: {
+    summary: string;
+    sessions: StudyPlanSession[];
+  }
+}
+
+export async function generateStudyPlan(message: string): Promise<StudyPlanResponse> {
+  const response = await apiFetch('/ai/study-plan/', {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('UNAUTHORIZED');
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || errorData.detail || 'Plan oluşturulamadı.');
+  }
+
+  return response.json();
+}
+
+export async function confirmStudyPlan(sessions: StudyPlanSession[]) {
+  const response = await apiFetch('/calendar/confirm-study-plan/', {
+    method: 'POST',
+    body: JSON.stringify({ sessions }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('UNAUTHORIZED');
+    const errorData = await response.json().catch(() => ({}));
+
+    // Check if it's the specific OAuth error we threw
+    if (response.status === 403 && errorData.needs_oauth) {
+      const err = new Error('NEEDS_OAUTH');
+      (err as any).auth_url = errorData.auth_url;
+      throw err;
+    }
+
+    throw new Error(errorData.error || errorData.detail || 'Takvime eklenemedi.');
+  }
+
+  return response.json();
+}
+
+// ─── Session API ─────────────────────────────────────────────────
+
+export interface SessionPayload {
+  session_type: 'pomodoro' | 'stopwatch' | 'short_break' | 'long_break';
+  title: string;
+  planned_duration_minutes: number;
+  actual_duration_seconds: number;
+  started_at: string;
+  ended_at: string;
+  completed: boolean;
+}
+
+interface SaveSessionResponse {
+  message: string;
+  session: SessionPayload & { id: number; created_at: string };
+}
+
+export async function saveSession(
+  payload: SessionPayload,
+): Promise<SaveSessionResponse> {
+  const response = await apiFetch('/save-session/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('UNAUTHORIZED');
+    }
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || errorData.error || 'Oturum kaydedilemedi.',
+    );
+  }
+
+  return response.json();
+}
+
+export interface StudySessionRecord {
+  id: number;
+  session_type: string;
+  title: string;
+  planned_duration_minutes: number;
+  actual_duration_seconds: number;
+  started_at: string;
+  ended_at: string;
+  completed: boolean;
+  created_at: string;
+}
+
+export async function getUserSessions(
+  params?: { session_type?: string; limit?: number },
+): Promise<StudySessionRecord[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.session_type) searchParams.set('session_type', params.session_type);
+  if (params?.limit) searchParams.set('limit', params.limit.toString());
+
+  const query = searchParams.toString();
+  const endpoint = `/sessions/${query ? `?${query}` : ''}`;
+
+  const response = await apiFetch(endpoint, { method: 'GET' });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('UNAUTHORIZED');
+    }
+    throw new Error('Oturumlar alınamadı.');
+  }
+
+  return response.json();
+}
+
+// ─── Logout ──────────────────────────────────────────────────────
+
+export function logoutUser(): void {
+  clearTokens();
+}
+
+/**
+ * Synchronizes local sessions with the backend.
+ * Checks for sessions in localStorage that haven't been synced yet.
+ */
+export async function syncLocalSessions(): Promise<void> {
+  const saved = localStorage.getItem('pomodoroSessions');
+  if (!saved || !isAuthenticated()) return;
+
+  try {
+    const sessions = JSON.parse(saved);
+    // Explicitly type as any[] if needed, or define a local interface
+    const unsynced = sessions.filter((s: any) => !s.synced);
+
+    if (unsynced.length === 0) return;
+
+    console.log(`Syncing ${unsynced.length} sessions to backend...`);
+
+    for (const s of unsynced) {
+      const payload: SessionPayload = {
+        session_type: 'pomodoro',
+        title: s.subject || 'Diğer',
+        planned_duration_minutes: 25,
+        actual_duration_seconds: s.duration || 0,
+        started_at: s.date,
+        ended_at: s.date, // Approximate for history
+        completed: true,
+      };
+
+      try {
+        await saveSession(payload);
+        s.synced = true;
+      } catch (err) {
+        console.error('Failed to sync individual session', err);
+      }
+    }
+
+    // Save updated list back to localStorage
+    localStorage.setItem('pomodoroSessions', JSON.stringify(sessions));
+    console.log('Sync completed.');
+  } catch (err) {
+    console.error('Local session sync failed', err);
+  }
+}

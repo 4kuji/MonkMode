@@ -3,3 +3,14 @@ __pycache__/
 env/
 venv/
 db.sqlite3
+# Frontend
+node_modules/
+frontend/node_modules/
+frontend/.env
+.env
+.env.*
+*.pyc
+
+# IDE
+.vscode/
+.idea/
